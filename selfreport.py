@@ -70,13 +70,4 @@ def run(mother):
             output = newtext(title, trimmed)
             page.save(output, "Automated edit to move self reports into category")
 
-            sys.exit()
-
-    # TODO: Once all categorized, read them out and make various listings by subject/etc.
-    """
-    category = mother.categories['Self Report Measure']
-    for page in category:
-        text = page.text()
-        p =  mwparserfromhell.parse(text)
-    """
 
