@@ -34,15 +34,11 @@ def run(mother):
         for measure in constructs[k]:
             newtext += "* [[" + measure + "]]\n"
 
-
     # Replace the "Sorted by Construct" section with our new text
-    entirepage = re.sub(title + ".+(?=== Sorted Alpha)", newtext, oldtext)
-    print(entirepage)
+    old_section = cat.get_sections(matches = "Sorted by Construct")[0]
+    cat.replace(old_section, newtext)
+    newpage = str(cat)
 
-    # TODO: this should be easy but it's not!
-    from IPython import embed
-    embed()
-
-    if oldtext != entirepage:
+    if oldtext != newpage:
         logging.warning("Updating self-report category page, change detected")
-        category.save(entirepage, "Automated edit to build construct categories on self-report library")
+        category.save(newpage, "Automated edit to build construct categories on self-report library")
