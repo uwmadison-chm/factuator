@@ -11,7 +11,7 @@ A Python bot to help maintain fancier features of the MOTHER wiki at CHM.
 ### Media links
 
 Replace all `[[:File:Name.pdf]]` and `[[File:Name.pdf]]` style links with 
-`[[Media:Name.pdf` to make them link directly to the file.
+`[[Media:Name.pdf]]` to make them link directly to the file.
 
 On a page:
 
