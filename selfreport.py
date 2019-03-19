@@ -55,7 +55,7 @@ def run(mother):
 
             if "[[Category:Self Report Measure]]" in measure: continue
 
-            print("Updating page", title)
+            logging.info("Updating page", title)
 
             # trim out link to Self-Report Library, not needed in category mode
             for measure_link in measure.filter_wikilinks():
