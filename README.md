@@ -4,9 +4,20 @@ A Python bot to help maintain fancier features of the MOTHER wiki at CHM.
 
 ## Requirements
 
-    pip3 install mwclient mwparserfromhell coloredlogs
+    pip3 install mwclient mwparserfromhell requests coloredlogs
 
 ## Examples
+
+Factuator can be loud, just add `-v` for info messages or `-vv` for debug logging.
+
+Currently, it warns you if it's actually updating things, and it tries to only 
+post changes if things are different.
+
+### Update study pages
+
+Update all `{{Study}}` infobox templates on Category:Study pages.
+
+    python3 factuator.py --study
 
 ### Media links
 
