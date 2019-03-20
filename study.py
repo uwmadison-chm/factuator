@@ -2,16 +2,19 @@ import mwclient
 import mwparserfromhell
 import logging
 import requests
+import dateutil.parser
+
+def jsondate_to_str(j):
+    return str(dateutil.parser.parse(j).date())
 
 def run(mother):
     category = mother.categories['Study']
     for page in category:
         oldtext = page.text()
         p =  mwparserfromhell.parse(oldtext)
-        for template in p.filter_templates():
+        for template in p.filter_templates(matches="Study"):
             logging.debug("Page {} has template {} with these params: {}".format(
                 page.name, template.name.rstrip(), template.params))
-            if template.name != "Study": continue
 
             try:
                 jarvis_id = template.get("JARVIS ID").value.rstrip()
@@ -44,10 +47,10 @@ def run(mother):
                     data = resp.json()
                     template.add("NIH Title", data['title'])
                     template.add("NIH Fiscal Year", data['fy'])
-                    template.add("NIH Budget Start Date", data['budgetStartDate'])
-                    template.add("NIH Budget End Date", data['budgetEndDate'])
-                    template.add("NIH Project Start Date", data['projectStartDate'])
-                    template.add("NIH Project End Date", data['projectEndDate'])
+                    template.add("NIH Budget Start Date", jsondate_to_str(data['budgetStartDate']))
+                    template.add("NIH Budget End Date", jsondate_to_str(data['budgetEndDate']))
+                    template.add("NIH Project Start Date", jsondate_to_str(data['projectStartDate']))
+                    template.add("NIH Project End Date", jsondate_to_str(data['projectEndDate']))
 
         newtext = str(p)
 
