@@ -3,6 +3,7 @@ import mwparserfromhell
 import logging
 import requests
 import dateutil.parser
+import jarvis
 
 def jsondate_to_str(j):
     return str(dateutil.parser.parse(j).date())
@@ -19,15 +20,23 @@ def run(mother):
             try:
                 jarvis_id = template.get("JARVIS ID").value.rstrip()
             except ValueError:
-                # We just skip JARVIS integration if there's no id or we fail in any way
+                # Skip JARVIS integration if there's no id
                 logging.warning("No JARVIS ID on study page %s" % page.name)
                 pass
             else:
-                # TODO: Pull stuff out of JARVIS and put it into the template params
-                logging.info("JARVIS id for %s is %s" % (page.name, jarvis_id))
-                template.add("JARVIS IRB Expiration", "[from JARVIS TODO]")
-                template.add("JARVIS Study Drive Quota", "[from JARVIS TODO]")
-                template.add("JARVIS Personnel", "[from JARVIS TODO]")
+                try:
+                    # TODO: Pull stuff out of JARVIS and put it into the template params
+                    jarvis = Jarvis()
+                    from IPython import embed; embed()
+
+                    logging.info("JARVIS id for %s is %s" % (page.name, jarvis_id))
+                    template.add("JARVIS IRB Expiration", "[from JARVIS TODO]")
+                    template.add("JARVIS Study Drive Quota", "[from JARVIS TODO]")
+                    # Personnel is a different section
+                except:
+                    # Print the error and keep going
+                    logging.error("Problem fetching on study page %s" % page.name)
+                    pass
 
             try:
                 nih_id = template.get("NIH RePORTER ID").value.rstrip()
