@@ -22,12 +22,10 @@ def run_pages(mother, pages):
         page = mother.pages[title]
         text = page.text()
         p =  mwparserfromhell.parse(text)
-        print(p)
         for link in p.filter_wikilinks():
             link_title = str(link.title)
             link_page = mother.pages[link_title]
             red_link = fix(link_page)
             if has_bad_link:
                 p.replace(link.title,red_link)
-                print(p)
                 page.save(str(p), "Automated edit to make links to redirected pages link to proper page instead")
