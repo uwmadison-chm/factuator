@@ -14,6 +14,8 @@ parser.add_argument('--selfreport', help='Update self report pages', action='sto
 parser.add_argument('--selfreportlibrary', help='Update self report library', action='store_true')
 parser.add_argument('--medialinks-category', help='Update File: to Media: links in given category', action='append')
 parser.add_argument('--medialinks-page', help='Update File: to Media: links on given page', action='append')
+parser.add_argument('--redirectlinks-page', help='Update redirected links in given pages', action='append')
+parser.add_argument('--studylibrary', help='Update study library', action='store_true')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -46,5 +48,11 @@ elif args.medialinks_category:
 elif args.medialinks_page:
     import medialinks
     medialinks.run_pages(mother, args.medialinks_page)
+elif args.redirectlinks_page:
+    import redirectlinks
+    redirectlinks.run_pages(mother, args.redirectlinks_page)
+elif args.all or args.studylibrary:
+    import studylibrary
+    studylibrary.run(mother)
 else:
     parser.print_help()
