@@ -37,7 +37,7 @@ def run(mother):
     newtext += "<div class='mw-category'>"
 
     # Build up an index by construct
-    for k in constructs:
+    for k in sorted(constructs.keys()):
         newtext += "<div class='mw-category-group'><h3>" + k + "</h3>\n"
         for measure in constructs[k]:
             newtext += "* [[" + measure + "]]\n"
