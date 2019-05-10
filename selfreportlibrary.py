@@ -40,13 +40,70 @@ def run(mother):
     for k in sorted(constructs.keys()):
         newtext += "<div class='mw-category-group'><h3>" + k + "</h3>\n"
         for measure in constructs[k]:
-            newtext += "* [[" + measure + "]]\n"
+            mpage = mother.pages[measure]
+            mtext = mpage.text()
+            mp = mwparserfromhell.parse(mtext)
+            cost = ""
+            duration = ""
+            items = ""
+            for template in mp.filter_templates():
+                if template.has("Cost"):
+                    cost = template.get("Cost").value.strip()
+                    if '[' in cost:
+                        url = re.findall(r'(https?://\S+)', cost)
+                        cost = "[" + url[0] + "]"
+                        if ".pdf" in url[0]:
+                            cost = "[" + url[0]
+                    if cost != "":
+                        cost = "Cost: " + cost
+                if template.has("Duration"):
+                    duration = template.get("Duration").value.strip()
+                    if duration != "":
+                        duration = "Duration: " + duration
+                if template.has("Number of items"):
+                    items = template.get("Number of items").value.strip()
+                    if items != "":
+                        items = "Items: " + items
+                info = [cost, duration, items]
+                inf = [value for value in info if value]
+            if inf != []:
+                newtext += "* [[" + measure + "]] - (" + ", ".join(inf) + ")\n"
+            else :
+                newtext += "* [[" + measure + "]]\n"
         newtext += "</div>"
-
     # List out things that are missing constructs
     newtext += "<div class='mw-category-group'><h3>No constructs listed</h3>\n"
     for m in missing_constructs:
-        newtext += "* [[" + m + "]]\n"
+        mpage = mother.pages[m]
+        mtext = mpage.text()
+        mp = mwparserfromhell.parse(mtext)
+        cost = ""
+        duration = ""
+        items = ""
+        for template in mp.filter_templates():
+            if template.has("Cost"):
+                cost = template.get("Cost").value.strip()
+                if '[' in cost:
+                    url = re.findall(r'(https?://\S+)', cost)
+                    cost = "[" + url[0] + "]"
+                    if ".pdf" in url[0]:
+                        cost = "[" + url[0]
+                    if cost != "":
+                        cost = "Cost: " + cost
+            if template.has("Duration"):
+                duration = template.get("Duration").value.strip()
+                if duration != "":
+                    duration = "Duration: " + duration
+            if template.has("Number of items"):
+                items = template.get("Number of items").value.strip()
+                if items != "":
+                    items = "Items: " + items
+            info = [cost, duration, items]
+            inf = [value for value in info if value]
+        if inf != []:
+            newtext += "* [[" + m + "]] - (" + ", ".join(inf) + ")\n"
+        else :
+            newtext += "* [[" + m + "]]\n"
     newtext += "</div>"
 
     newtext += "</div>\n\n"
