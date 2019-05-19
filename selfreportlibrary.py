@@ -88,8 +88,9 @@ def run(mother):
         
     # List out things that are missing constructs
     newtext += "<div class='mw-category-group'><h3>No constructs listed</h3>\n"
-    for m in missing_constructs[:-1]: # Ignores last index as that contains the self-report category page itself
+    for m in missing_constructs:
         mpage = mother.pages[m]
+        print(mpage)
         inf = details(mpage)
         # Only add measure info if it exists in page template
         if inf != []:
@@ -107,4 +108,4 @@ def run(mother):
 
     if oldtext != newpage:
         logging.warning("Updating self-report category page, change detected")
-        category.save(newpage, "Automated edit to build construct categories on self-report library")
+        #category.save(newpage, "Automated edit to build construct categories on self-report library")
