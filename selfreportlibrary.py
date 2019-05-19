@@ -90,7 +90,6 @@ def run(mother):
     newtext += "<div class='mw-category-group'><h3>No constructs listed</h3>\n"
     for m in missing_constructs:
         mpage = mother.pages[m]
-        print(mpage)
         inf = details(mpage)
         # Only add measure info if it exists in page template
         if inf != []:
