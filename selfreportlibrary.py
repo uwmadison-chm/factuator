@@ -1,7 +1,44 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Apr 17 11:17:59 2019
+
+@author: guzman
+"""
+
 import mwclient
 import mwparserfromhell
 import logging
 import re
+
+# Adds cost, duration, and item info to construct list for each measure 
+def details(mpage):
+    mtext = mpage.text()
+    mp = mwparserfromhell.parse(mtext)
+    cost = ""
+    duration = ""
+    items = ""
+    for template in mp.filter_templates():
+        if template.has("Cost"):
+            cost = template.get("Cost").value.strip()
+            if '[' in cost:
+                url = re.findall(r'(https?://\S+)', cost)
+                cost = "[" + url[0] + "]"
+                if ".pdf" in url[0]:
+                    cost = "[" + url[0]
+            if cost != "":
+                cost = "Cost: " + cost
+        if template.has("Duration"):
+            duration = template.get("Duration").value.strip()
+            if duration != "":
+                duration = "Duration: " + duration
+        if template.has("Number of items"):
+            items = template.get("Number of items").value.strip()
+            if items != "":
+                items = "Items: " + items
+        info = [cost, duration, items]
+        inf = [value for value in info if value]
+        return inf
+    
 
 def run(mother):
     category = mother.categories['Self Report Measure']
@@ -37,69 +74,24 @@ def run(mother):
     newtext += "<div class='mw-category'>"
 
     # Build up an index by construct
-    for k in constructs:
+    for k in sorted(constructs.keys()):
         newtext += "<div class='mw-category-group'><h3>" + k + "</h3>\n"
         for measure in constructs[k]:
             mpage = mother.pages[measure]
-            mtext = mpage.text()
-            mp = mwparserfromhell.parse(mtext)
-            cost = ""
-            duration = ""
-            items = ""
-            for template in mp.filter_templates():
-                if template.has("Cost"):
-                    cost = template.get("Cost").value.strip()
-                    if '[' in cost:
-                        url = re.findall(r'(https?://\S+)', cost)
-                        cost = "[" + url[0] + "]"
-                        if ".pdf" in url[0]:
-                            cost = "[" + url[0]
-                    if cost != "":
-                        cost = "Cost: " + cost
-                if template.has("Duration"):
-                    duration = template.get("Duration").value.strip()
-                    if duration != "":
-                        duration = "Duration: " + duration
-                if template.has("Number of items"):
-                    items = template.get("Number of items").value.strip()
-                    if items != "":
-                        items = "Items: " + items
-                info = [cost, duration, items]
-                inf = [value for value in info if value]
+            inf = details(mpage)
+            # Only add measure info if it exists in page template
             if inf != []:
                 newtext += "* [[" + measure + "]] - (" + ", ".join(inf) + ")\n"
             else :
                 newtext += "* [[" + measure + "]]\n"
         newtext += "</div>"
+        
     # List out things that are missing constructs
     newtext += "<div class='mw-category-group'><h3>No constructs listed</h3>\n"
-    for m in missing_constructs:
+    for m in missing_constructs[:-1]: # Ignores last index as that contains the self-report category page itself
         mpage = mother.pages[m]
-        mtext = mpage.text()
-        mp = mwparserfromhell.parse(mtext)
-        cost = ""
-        duration = ""
-        items = ""
-        for template in mp.filter_templates():
-            if template.has("Cost"):
-                cost = template.get("Cost").value.strip()
-                if '[' in cost:
-                    url = re.findall(r'(https?://\S+)', cost)
-                    cost = "[" + url[0] + "]"
-                    if ".pdf" in url[0]:
-                        cost = "[" + url[0]
-                    if cost != "":
-                        cost = "Cost: " + cost
-            if template.has("Duration"):
-                duration = template.get("Duration").value.strip()
-                if duration != "":
-                    duration = "Duration: " + duration
-            if template.has("Number of items"):
-                items = template.get("Number of items").value.strip()
-                if items != "":
-                    items = "Items: " + items
-            info = [cost, duration, items]
-            inf = [value for value in info if value]
+        inf = details(mpage)
+        # Only add measure info if it exists in page template
         if inf != []:
             newtext += "* [[" + m + "]] - (" + ", ".join(inf) + ")\n"
         else :
@@ -107,7 +99,7 @@ def run(mother):
     newtext += "</div>"
 
     newtext += "</div>\n\n"
-
+    
     # Replace the "Sorted by Construct" section with our new text
     old_section = cat.get_sections(matches = "Sorted by Construct")[0]
     cat.replace(old_section, newtext)
