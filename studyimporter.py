@@ -2,17 +2,23 @@ import mwclient
 import mwparserfromhell
 import logging
 import csv
+import sys
 
-def importer(mother, row):
-    title = "Testing/%s" % row["Study Short Name"]
+def importer(mother, row, boilerplate):
+    title = row["Study Short Name"]
     logging.info("Importing %s" % title)
 
     page = mother.pages[title]
     oldtext = page.text()
+    if oldtext != "":
+        logging.warning("Collision on study page %s" % title)
+        sys.exit()
+        
     p = mwparserfromhell.parse(oldtext)
 
-    if str(p) == "":
-        p.insert(0, "{{Study}}")
+    p.insert(0, boilerplate)
+    p.insert(0, "{{Study}}")
+
     template = p.filter_templates(matches="Study")[0]
     template.add("AKA", row["AKA"])
     template.add("PIs", row["PIs"])
@@ -33,7 +39,7 @@ def importer(mother, row):
     if row["ClinicalTrials.Gov URL"] != "N/A":
         template.add("ClinicalTrials.Gov", row["ClinicalTrials.Gov URL"])
 
-    # TODO: insert into page at top section
+    # insert into page at top section
     overview = row["General Overview Paragraph"]
     if overview not in p:
         p.insert(0, overview)
@@ -46,5 +52,6 @@ def run(mother, csvpath):
     logging.info("Opening %s" % csvpath)
     with open(csvpath) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
+        boilerplate = mother.pages['Template:Study boilerplate'].text()
         for row in reader:
-            importer(mother, row)
+            importer(mother, row, boilerplate)
