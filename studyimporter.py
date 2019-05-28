@@ -12,7 +12,7 @@ def importer(mother, row, boilerplate):
     oldtext = page.text()
     if oldtext != "":
         logging.warning("Collision on study page %s" % title)
-        sys.exit()
+        return
         
     p = mwparserfromhell.parse(oldtext)
 

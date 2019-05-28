@@ -27,15 +27,14 @@ def run(mother):
                 try:
                     # TODO: Pull stuff out of JARVIS and put it into the template params
                     jarvis = Jarvis()
-                    from IPython import embed; embed()
 
                     logging.info("JARVIS id for %s is %s" % (page.name, jarvis_id))
-                    template.add("JARVIS IRB Expiration", "[from JARVIS TODO]")
-                    template.add("JARVIS Study Drive Quota", "[from JARVIS TODO]")
+                    template.add("JARVIS IRB Expiration", "")
+                    template.add("JARVIS Study Drive Quota", "")
                     # Personnel is a different section
                 except:
                     # Print the error and keep going
-                    logging.error("Problem fetching on study page %s" % page.name)
+                    logging.error("Problem fetching from JARVIS on study page %s" % page.name)
                     pass
 
             try:
@@ -62,7 +61,10 @@ def run(mother):
                     template.add("NIH Project End Date", jsondate_to_str(data['projectEndDate']))
 
         newtext = str(p)
+        newtext = newtext.replace("<noinclude>NOTE: This is prefab content inserted in new study pages</noinclude>", "")
 
         if oldtext != newtext:
             logging.warning("Updating study page %s, change detected", page.name)
             page.save(newtext, "Automated edit to update study values from JARVIS and NIH")
+        else:
+            logging.info("Not updating study page %s, text identical", page.name)
