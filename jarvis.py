@@ -82,12 +82,48 @@ class Jarvis:
     def study(self, study_id):
         return self.select("SELECT folder, name, current_subjects, total_subjects FROM studies WHERE id = %s" % study_id)
 
+
     def quotas(self, study_id):
         return self.select("SELECT * FROM quotas where startdate < current_date AND enddate > current_date AND study_id = %s" % study_id)
+
+    def total_active_quota(self, study_id):
+        return sum([quota['quotagb'] for quota in self.quotas(study_id)])
+
 
     def protocols(self, study_id):
         return self.select("SELECT protocol, expiration FROM irb_protocols p JOIN irb_studies s ON p.id = s.irb_protocol_id WHERE s.study_id = %s" % study_id)
 
+    def irb_expirations(self, study_id):
+        return ", ".join(["{} expires {}".format(p[0], p[1]) for p in self.protocols(study_id)])
 
-#from IPython import embed; embed()
+
+    def people(self, study_id):
+        return self.select("""SELECT p.id, p.first, p.last, ip.pi, ip.admin, ip.irb_alerts FROM irb_studies s
+                JOIN irb_people ip ON ip.irb_protocol_id = s.irb_protocol_id
+                JOIN people p on p.id = ip.person_id
+                WHERE s.study_id = %s
+                ORDER BY ip.pi DESC, ip.admin DESC, ip.irb_alerts DESC, ip.created_at ASC""" % study_id)
+
+    def personnel(self, study_id):
+        # We want a table of people and whether they are a PI, admin, and/or irb_alert_thinger
+        table = """{| class="wikitable" style="text-align:left;"\n!Name\n!PI\n!Admin\n!IRB Alerts"""
+        for p in self.people(study_id):
+            table += "\n|-\n"
+            table += "\n|{first} {last}".format(**p)
+
+            table += "\n|"
+            if p['pi']:
+                table += "✓"
+
+            table += "\n|"
+            if p['admin']:
+                table += "✓"
+
+            table += "\n|"
+            if p['irb_alerts']:
+                table += "✓"
+
+        table += "\n|}"
+        return table
+
 
