@@ -87,14 +87,18 @@ class Jarvis:
         return self.select("SELECT * FROM quotas where startdate < current_date AND enddate > current_date AND study_id = %s" % study_id)
 
     def total_active_quota(self, study_id):
-        return sum([quota['quotagb'] for quota in self.quotas(study_id)])
+        return "{}gb".format(sum([quota['quotagb'] for quota in self.quotas(study_id)]))
 
 
     def protocols(self, study_id):
         return self.select("SELECT protocol, expiration FROM irb_protocols p JOIN irb_studies s ON p.id = s.irb_protocol_id WHERE s.study_id = %s" % study_id)
 
     def irb_expirations(self, study_id):
-        return ", ".join(["{} expires {}".format(p[0], p[1]) for p in self.protocols(study_id)])
+        irbs = self.protocols(study_id)
+        if len(irbs) == 1:
+            return str(irbs[0][1])
+        else:
+            return ", ".join(["{} expires {}".format(p[0], p[1]) for p in irbs])
 
 
     def people(self, study_id):
@@ -124,6 +128,9 @@ class Jarvis:
                 table += "✓"
 
         table += "\n|}"
-        return table
+
+        title = "=== JARVIS Personnel ==="
+        link = """This information is auto-populated from [https://brainimaging.waisman.wisc.edu/members/jarvis/studies/{} JARVIS].""".format(study_id)
+        return title + "\n\n" + link + "\n\n" + table
 
 

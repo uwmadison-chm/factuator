@@ -4,6 +4,8 @@ A Python bot to help maintain fancier features of the MOTHER wiki at CHM.
 
 ## Requirements
 
+    python3 -m virtualenv .venv
+    source .venv/bin/activate
     pip3 install -r requirements.txt
 
 ## Examples

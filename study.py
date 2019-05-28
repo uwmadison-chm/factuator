@@ -3,7 +3,8 @@ import mwparserfromhell
 import logging
 import requests
 import dateutil.parser
-import jarvis
+import traceback
+from jarvis import Jarvis
 
 def jsondate_to_str(j):
     return str(dateutil.parser.parse(j).date())
@@ -25,16 +26,27 @@ def run(mother):
                 pass
             else:
                 try:
-                    # TODO: Pull stuff out of JARVIS and put it into the template params
-                    jarvis = Jarvis()
+                    # Pull stuff out of JARVIS and put it into the template params
+                    j = Jarvis()
 
                     logging.info("JARVIS id for %s is %s" % (page.name, jarvis_id))
-                    template.add("JARVIS IRB Expiration", "")
-                    template.add("JARVIS Study Drive Quota", "")
-                    # Personnel is a different section
-                except:
+                    irb_exp = j.irb_expirations(jarvis_id)
+                    if irb_exp:
+                        template.add("JARVIS IRB Expiration", irb_exp)
+                    quota = j.total_active_quota(jarvis_id)
+                    if quota:
+                        template.add("JARVIS Study Drive Quota", quota)
+                    
+                    # Personnel is a different section of the document, so replace that
+                    personnel = j.personnel(jarvis_id)
+                    old_sections = p.get_sections(matches = "JARVIS Personnel")
+                    if len(old_sections) > 0:
+                        old_personnel = old_sections[0]
+                        p.replace(old_personnel, personnel)
+
+                except Exception as e:
                     # Print the error and keep going
-                    logging.error("Problem fetching from JARVIS on study page %s" % page.name)
+                    logging.error(f"Problem fetching from JARVIS on study page {page.name}: {traceback.print_exc()}")
                     pass
 
             try:
