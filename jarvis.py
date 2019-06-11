@@ -3,62 +3,6 @@ import psycopg2.extras
 
 # NOTE: You will need to `kinit` a kerberos token to make this db connection work
 
-# Jarvis tables:
-#
-# ['account_group_members',
-#  'account_groups',
-#  'account_requests',
-#  'activity_logs',
-#  'ar_internal_metadata',
-#  'budget_categories',
-#  'computer_group_members',
-#  'computer_part_instances',
-#  'computer_part_types',
-#  'computer_parts',
-#  'computer_statuses',
-#  'computer_tickets',
-#  'computers',
-#  'drives',
-#  'funds',
-#  'irb_people',
-#  'irb_protocol_acgroups',
-#  'irb_protocols',
-#  'irb_studies',
-#  'ksus',
-#  'labs',
-#  'lib_checkouts',
-#  'lib_items',
-#  'lib_media',
-#  'license_types',
-#  'net_bind_forwards',
-#  'net_bind_rec_types',
-#  'net_if_jacks',
-#  'net_ifs',
-#  'net_ips',
-#  'net_jacks',
-#  'net_subnets',
-#  'operating_systems',
-#  'people',
-#  'person_email_aliases',
-#  'program_installs',
-#  'program_purchases',
-#  'programs',
-#  'quotas',
-#  'roles',
-#  'rooms',
-#  'schema_migrations',
-#  'sessions',
-#  'storage_requests',
-#  'studies',
-#  'switch_ports',
-#  'switches',
-#  'ticket_message_parts',
-#  'ticket_messages',
-#  'ticket_statuses',
-#  'tickets',
-#  'titles',
-#  'unix_shells']
-
 class Jarvis:
     def __init__(self):
         self.db = psycopg2.connect("postgresql://togarashi.keck.waisman.wisc.edu/bi?krbsrvname=postgres")
@@ -110,27 +54,76 @@ class Jarvis:
 
     def personnel(self, study_id):
         # We want a table of people and whether they are a PI, admin, and/or irb_alert_thinger
-        table = """{| class="wikitable" style="text-align:left;"\n!Name\n!PI\n!Admin\n!IRB Alerts"""
+        # And now we also want groups
+
+        group_info = self.select("""SELECT concat(p.first, ' ', p.last), ag.name FROM irb_studies s
+            JOIN irb_protocols irb ON s.irb_protocol_id = irb.id
+            JOIN irb_protocol_acgroups ipa ON irb.id = ipa.irb_protocol_id
+            JOIN account_groups ag on ipa.acgroup_id = ag.id
+            JOIN account_group_members gm on gm.group_id = ag.id
+            JOIN account_groups ag2 on ag2.id = gm.member_id
+            JOIN people p on ag2.person_id = p.id
+            WHERE NOT ag2.isgroup AND p.first IS NOT NULL AND p.first != '' AND study_id = %s
+            ORDER BY ag.id ASC, p.last ASC, p.first ASC""" % study_id)
+
+        group_map = {}
+        all_groups = []
+        people_map = {}
+        all_people = []
+
         for p in self.people(study_id):
+            name = "{first} {last}".format(**p)
+            if not name in all_people:
+                all_people.append(name)
+            people_map[name] = p
+
+        for x in group_info:
+            name = x[0]
+            group = x[1]
+            if not name in all_people:
+                all_people.append(name)
+            if not group in all_groups:
+                all_groups.append(group)
+            if name in group_map:
+                group_map[name].append(group)
+            else:
+                group_map[name] = [group]
+
+        table = """{| class="wikitable" style="text-align:left;"\n!Name\n!PI\n!Admin"""
+        for g in all_groups:
+            table += "\n!" + g
+
+        for name in all_people:
             table += "\n|-\n"
-            table += "\n|{first} {last}".format(**p)
-
             table += "\n|"
-            if p['pi']:
-                table += "✓"
 
-            table += "\n|"
-            if p['admin']:
-                table += "✓"
+            if name in people_map:
+                p = people_map[name]
+                table += "'''" + name + "'''"
+                
+                table += "\n|"
+                if p['pi']:
+                    table += "✓"
 
-            table += "\n|"
-            if p['irb_alerts']:
-                table += "✓"
+                table += "\n|"
+                if p['admin']:
+                    table += "✓"
+
+            else:
+                table += name
+                table += "\n|"
+                table += "\n|"
+
+            for g in all_groups:
+                table += "\n|"
+                if name in group_map:
+                    if g in group_map[name]:
+                        table += "✓"
 
         table += "\n|}"
+
 
         title = "=== JARVIS Personnel ==="
         link = """This information is auto-populated from [https://brainimaging.waisman.wisc.edu/members/jarvis/studies/{} JARVIS].""".format(study_id)
         return title + "\n\n" + link + "\n\n" + table
-
 
