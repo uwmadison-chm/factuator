@@ -107,4 +107,4 @@ def run(mother):
 
     if oldtext != newpage:
         logging.warning("Updating self-report category page, change detected")
-        #category.save(newpage, "Automated edit to build construct categories on self-report library")
+        category.save(newpage, "Automated edit to build construct categories on self-report library")
