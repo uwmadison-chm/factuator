@@ -125,5 +125,5 @@ class Jarvis:
 
         title = "=== JARVIS Personnel ==="
         link = """This information is auto-populated from [https://brainimaging.waisman.wisc.edu/members/jarvis/studies/{} JARVIS].""".format(study_id)
-        return title + "\n\n" + link + "\n\n" + table
+        return title + "\n\n" + link + "\n\n" + table + "\n\n"
 
