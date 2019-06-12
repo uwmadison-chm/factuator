@@ -56,7 +56,7 @@ class Jarvis:
         # We want a table of people and whether they are a PI, admin, and/or irb_alert_thinger
         # And now we also want groups
 
-        group_info = self.select("""SELECT concat(p.first, ' ', p.last), ag.name FROM irb_studies s
+        group_info = self.select("""SELECT concat(p.first, ' ', p.last), ag.name, ag.id FROM irb_studies s
             JOIN irb_protocols irb ON s.irb_protocol_id = irb.id
             JOIN irb_protocol_acgroups ipa ON irb.id = ipa.irb_protocol_id
             JOIN account_groups ag on ipa.acgroup_id = ag.id
@@ -67,6 +67,7 @@ class Jarvis:
             ORDER BY ag.id ASC, p.last ASC, p.first ASC""" % study_id)
 
         group_map = {}
+        group_ids = {}
         all_groups = []
         people_map = {}
         all_people = []
@@ -80,6 +81,7 @@ class Jarvis:
         for x in group_info:
             name = x[0]
             group = x[1]
+            group_ids[group] = x[2]
             if not name in all_people:
                 all_people.append(name)
             if not group in all_groups:
@@ -91,7 +93,7 @@ class Jarvis:
 
         table = """{| class="wikitable" style="text-align:left;"\n!Name\n!PI\n!Admin"""
         for g in all_groups:
-            table += "\n!" + g
+            table += "\n![https://brainimaging.waisman.wisc.edu/members/jarvis/account_groups/{} {}]".format(group_ids[g], g)
 
         for name in all_people:
             table += "\n|-\n"
