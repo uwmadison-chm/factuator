@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Apr 17 11:17:59 2019
-
-@author: guzman
-"""
-
 import mwclient
 import mwparserfromhell
 import logging
