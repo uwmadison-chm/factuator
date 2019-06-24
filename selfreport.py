@@ -54,6 +54,7 @@ def run(mother):
             measure = mwparserfromhell.parse(page.text())
 
             if "[[Category:Self Report Measure]]" in measure: continue
+            if "#REDIRECT" in measure: continue
 
             logging.info("Updating page", title)
 

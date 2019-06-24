@@ -10,7 +10,7 @@ import auth_store
 parser = argparse.ArgumentParser(description='Automate the wiki.')
 parser.add_argument('-v', '--verbose', action='count')
 parser.add_argument('-s', '--study', help='Update study pages', action='store_true')
-parser.add_argument('--selfreport', help='Update self report pages', action='store_true')
+parser.add_argument('--selfreport', help='Create initial self report pages (DO NOT RUN, for one-time use)', action='store_true')
 parser.add_argument('--selfreportlibrary', help='Update self report library', action='store_true')
 parser.add_argument('--medialinks-category', help='Update File: to Media: links in given category', action='append')
 parser.add_argument('--medialinks-page', help='Update File: to Media: links on given page', action='append')
@@ -34,13 +34,13 @@ user = auth[0]
 ua = 'factuator/0.1 run by User:' + user
 mother = mwclient.Site(('https', 'wiki.keck.waisman.wisc.edu'), path='/wikis/mother/', httpauth=auth)
 
-if args.all or args.study:
+if args.study:
     import study
     study.run(mother)
-elif args.all or args.selfreport:
+elif args.selfreport:
     import selfreport
     selfreport.run(mother)
-elif args.all or args.selfreportlibrary:
+elif args.selfreportlibrary:
     import selfreportlibrary
     selfreportlibrary.run(mother)
 elif args.medialinks_category:
@@ -55,8 +55,15 @@ elif args.redirectlinks_page:
 elif args.studyimporter:
     import studyimporter
     studyimporter.run(mother, args.studyimporter)
-elif args.all or args.studylibrary:
+elif args.studylibrary:
     import studylibrary
     studylibrary.run(mother)
+elif args.all:
+    import study
+    study.run(mother)
+    import studylibrary
+    studylibrary.run(mother)
+    import selfreportlibrary
+    selfreportlibrary.run(mother)
 else:
     parser.print_help()
