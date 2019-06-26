@@ -75,8 +75,17 @@ def run(mother):
         newtext = str(p)
         newtext = newtext.replace("<noinclude>NOTE: This is prefab content inserted in new study pages</noinclude>", "")
 
-        if oldtext != newtext:
+        if oldtext.strip() != newtext.strip():
             logging.warning("Updating study page %s, change detected", page.name)
+            """
+            # Debugging stuff
+            with open("old.tmp", "w") as text_file:
+                print(oldtext, file=text_file)
+            with open("new.tmp", "w") as text_file:
+                print(newtext, file=text_file)
+            import sys
+            sys.exit()
+            """
             page.save(newtext, "Automated edit to update study values from JARVIS and NIH")
         else:
             logging.info("Not updating study page %s, text identical", page.name)
