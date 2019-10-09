@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 import sys
 
 today = datetime.today()
+ten_months = relativedelta(months=10)
 six_months = relativedelta(months=6)
 two_months = relativedelta(months=2)
 
@@ -25,10 +26,10 @@ def append_rows(normal_rows, truncated_rows, study, bar_kind, s, e):
     normal_rows.append("[ '{0}', '{1}', '{2}', new Date({3}, {4}, {5}), new Date({6}, {7}, {8})]".format(
             study, bar_kind, color, s.year, s.month, s.day, e.year, e.month, e.day))
 
-    if e <= today - two_months or s >= today + six_months:
+    if e <= today - two_months or s >= today + ten_months:
         return
-    if e >= today + six_months:
-        e = today + six_months
+    if e >= today + ten_months:
+        e = today + ten_months
     if s <= today - two_months:
         s = today - two_months
 
@@ -111,7 +112,7 @@ body {
 <script type="text/javascript">
   google.charts.load("current", {packages:["timeline"]});
   google.charts.setOnLoadCallback(drawCharts);
-  function drawChart(id, data) {
+  function drawChart(id, data, width) {
     var container = document.getElementById(id);
     var chart = new google.visualization.Timeline(container);
     var dataTable = new google.visualization.DataTable();
@@ -128,14 +129,14 @@ body {
     // set the total chart height
     var chartHeight = rowHeight + paddingHeight;
 
-    chart.draw(dataTable, { width: 8000, height: chartHeight });
+    chart.draw(dataTable, { width: width, height: chartHeight });
   }
   function drawCharts() {
 """
 
     ending = """
-    drawChart('near-timeline', near);
-    drawChart('study-timeline', all);
+    drawChart('near-timeline', near, 2000);
+    drawChart('study-timeline', all, 2000);
   }
 </script>
 

@@ -69,5 +69,7 @@ elif args.all:
     studylibrary.run(mother)
     import selfreportlibrary
     selfreportlibrary.run(mother)
+    import studytimeline
+    studytimeline.run(mother)
 else:
     parser.print_help()
