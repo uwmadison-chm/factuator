@@ -91,6 +91,7 @@ body {
 }
 
 </style>
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
 
@@ -106,8 +107,6 @@ body {
 
 <h2>Date Parsing Warnings</h2>
 """ + "<br/>".join(warnings) + """
-
-<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
 <script type="text/javascript">
   google.charts.load("current", {packages:["timeline"]});
