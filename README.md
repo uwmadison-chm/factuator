@@ -8,6 +8,10 @@ A Python bot to help maintain fancier features of the MOTHER wiki at CHM.
     source .venv/bin/activate
     pip3 install -r requirements.txt
 
+## Kerberos security
+
+You'll need to `kinit` to get a token.
+
 ## Examples
 
 Factuator can be loud, just add `-v` for info messages or `-vv` for debug logging.
