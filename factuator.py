@@ -17,7 +17,7 @@ parser.add_argument('--medialinks-page', help='Update File: to Media: links on g
 parser.add_argument('--redirectlinks-page', help='Update redirected links in given pages', action='append')
 parser.add_argument('--studylibrary', help='Update study library', action='store_true')
 parser.add_argument('--studyimporter', metavar="CSV", help='Create study pages from given tsv')
-parser.add_argument('--studytimeline', help='Create or update study timeline page based on Category:Study', action='store_true')
+parser.add_argument('--timeline', help='Create or update timeline page based on Category:Study, Category:Project, and Category:Grant', action='store_true')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -59,9 +59,9 @@ elif args.studyimporter:
 elif args.studylibrary:
     import studylibrary
     studylibrary.run(mother)
-elif args.studytimeline:
-    import studytimeline
-    studytimeline.run(mother)
+elif args.timeline:
+    import timeline
+    timeline.run(mother)
 elif args.all:
     import study
     study.run(mother)
