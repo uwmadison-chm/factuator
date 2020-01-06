@@ -122,7 +122,7 @@ body {
   overflow-x: scroll;
   overflow-y: scroll;
   width: 100%;
-  min-height: 200px;
+  min-height: 100px;
   border: 1px solid #aaa;
   background-color: #fff;
 }
@@ -161,9 +161,9 @@ body {
     dataTable.addColumn({ type: 'date', id: 'End' });
     dataTable.addRows(data);
     // set a padding value to cover the height of title and axis values
-    var paddingHeight = 48;
+    var paddingHeight = 50;
     // set the height to be covered by the rows
-    var rowHeight = dataTable.getNumberOfRows() * 36;
+    var rowHeight = dataTable.getNumberOfRows() * 44;
     // set the total chart height
     var chartHeight = rowHeight + paddingHeight;
 
