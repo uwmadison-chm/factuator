@@ -1,3 +1,4 @@
 auth.pickle
 __pycache__
 .venv
+*.csv
