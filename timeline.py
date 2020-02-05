@@ -83,12 +83,20 @@ def build_chart(chart_items, warnings, links=""):
 
         if dates['Collecting Start Date']:
             bar_added = True
-            if dates['End Date']:
+            if dates['Collecting End Date']:
+                append_rows(normal_rows, truncated_rows, item,
+                        'Collecting', dates['Collecting Start Date'], dates['Collecting End Date'])
+            elif dates['End Date']:
                 append_rows(normal_rows, truncated_rows, item,
                         'Collecting', dates['Collecting Start Date'], dates['End Date'])
             else:
                 append_rows(normal_rows, truncated_rows, item,
                         'Piloting with No Collection Start', dates['Piloting Start Date'], today + six_months)
+
+        if dates['Collecting End Date']:
+            bar_added = True
+            append_rows(normal_rows, truncated_rows, item,
+                    'Wrapping Up', dates['Collecting End Date'], dates['End Date'])
 
         # Grants
         if dates['Letter of Intent Due']:

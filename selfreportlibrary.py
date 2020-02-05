@@ -31,6 +31,7 @@ def details(mpage):
         info = [cost, duration, items]
         inf = [value for value in info if value]
         return inf
+    return []
     
 
 def run(mother):
@@ -87,7 +88,7 @@ def run(mother):
         # Only add measure info if it exists in page template
         if inf != []:
             newtext += "* [[" + m + "]] - (" + ", ".join(inf) + ")\n"
-        else :
+        else:
             newtext += "* [[" + m + "]]\n"
     newtext += "</div>"
 
