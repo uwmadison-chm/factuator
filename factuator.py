@@ -19,6 +19,7 @@ parser.add_argument('--studylibrary', help='Update study library', action='store
 parser.add_argument('--studyimporter', metavar="CSV", help='Create study pages from given tsv')
 parser.add_argument('--timeline', help='Create or update timeline page based on Category:Study, Category:Project, and Category:Grant', action='store_true')
 parser.add_argument('--studyreport', help='Generate CSV report about studies', action='store_true')
+parser.add_argument('--rename-category', nargs=2, help='Rename category arg1 to arg2')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -66,6 +67,9 @@ elif args.timeline:
 elif args.studyreport:
     import studyreport
     studyreport.run(mother)
+elif args.rename_category:
+    import renamecategory
+    renamecategory.run(mother, args.rename_category[0], args.rename_category[1])
 elif args.all:
     import study
     study.run(mother)

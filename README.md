@@ -41,3 +41,10 @@ On multiple pages:
 On all pages in a category:
 
     python3 factuator.py --medialinks-category "Self Report Measure"
+
+### Rename category
+
+Replace all `[[Category:A]]` with `[[Category:B]]`. (Does not currently check 
+for `[[:Category:A]]`.)
+
+    python3 factuator.py --rename-category A B
