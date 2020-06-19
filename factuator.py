@@ -15,11 +15,14 @@ parser.add_argument('--selfreportlibrary', help='Update self report library', ac
 parser.add_argument('--medialinks-category', help='Update File: to Media: links in given category', action='append')
 parser.add_argument('--medialinks-page', help='Update File: to Media: links on given page', action='append')
 parser.add_argument('--redirectlinks-page', help='Update redirected links in given pages', action='append')
+parser.add_argument('--redirectlinks-category', help='Update redirected links in category')
 parser.add_argument('--studylibrary', help='Update study library', action='store_true')
 parser.add_argument('--studyimporter', metavar="CSV", help='Create study pages from given tsv')
 parser.add_argument('--timeline', help='Create or update timeline page based on Category:Study, Category:Project, and Category:Grant', action='store_true')
 parser.add_argument('--studyreport', help='Generate CSV report about studies', action='store_true')
-parser.add_argument('--rename-category', nargs=2, help='Rename category arg1 to arg2')
+parser.add_argument('--add-category', nargs=2, metavar=('category', 'match'), help='Add category `category` to pages with `match` in the title')
+parser.add_argument('--rename-category', nargs=2, metavar=('old', 'new'), help='Rename category `old` to `new`')
+parser.add_argument('--rename-regex', nargs=3, metavar=('match', 'regex', 'result'), help='Rename all pages with `match` in the title replacing `regex` with `result`')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -35,7 +38,7 @@ auth = auth_store.get_auth()
 user = auth[0]
 
 ua = 'factuator/0.1 run by User:' + user
-mother = mwclient.Site(('https', 'wiki.keck.waisman.wisc.edu'), path='/wikis/mother/', httpauth=auth)
+mother = mwclient.Site('wiki.keck.waisman.wisc.edu', path='/wikis/mother/', httpauth=auth)
 
 if args.study:
     import study
@@ -55,6 +58,9 @@ elif args.medialinks_page:
 elif args.redirectlinks_page:
     import redirectlinks
     redirectlinks.run_pages(mother, args.redirectlinks_page)
+elif args.redirectlinks_category:
+    import redirectlinks
+    redirectlinks.run_category(mother, args.redirectlinks_category)
 elif args.studyimporter:
     import studyimporter
     studyimporter.run(mother, args.studyimporter)
@@ -67,9 +73,15 @@ elif args.timeline:
 elif args.studyreport:
     import studyreport
     studyreport.run(mother)
+elif args.add_category:
+    import addcategory
+    addcategory.run(mother, args.add_category[0], args.add_category[1])
 elif args.rename_category:
     import renamecategory
     renamecategory.run(mother, args.rename_category[0], args.rename_category[1])
+elif args.rename_regex:
+    import renameregex
+    renameregex.run(mother, args.rename_regex[0], args.rename_regex[1], args.rename_regex[2])
 elif args.all:
     import study
     study.run(mother)
