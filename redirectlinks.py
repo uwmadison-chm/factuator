@@ -15,6 +15,7 @@ def fix(page):
         has_bad_link = True
         for link in red:
             red_link = link.title
+
     return red_link, has_bad_link
               
 def run_category(mother, category_name):
@@ -27,6 +28,7 @@ def run_pages(mother, pages):
     for title in pages:
         page = mother.pages[title]
         run_page(mother, page)
+
 
 def run_page(mother, page):
     oldtext = page.text()
