@@ -3,6 +3,7 @@ import mwparserfromhell
 import logging
 import re
 import csv
+from utilities import study_template
 
 def fetch(page, template, key):
     thing = ""
@@ -54,7 +55,7 @@ def run(mother):
             text = page.text()
             p = mwparserfromhell.parse(text)
 
-            template = p.filter_templates(matches="Study")[0]
+            template = study_template(p)
             column_values = [fetch(page, template, x) for x in columns]
             column_values[0] = page.name
 

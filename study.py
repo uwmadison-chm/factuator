@@ -5,6 +5,7 @@ import requests
 import dateutil.parser
 import traceback
 from jarvis import Jarvis
+from utilities import study_template
 
 def jsondate_to_str(j):
     return str(dateutil.parser.parse(j).date())
@@ -14,7 +15,8 @@ def run(mother):
     for page in category:
         oldtext = page.text()
         p =  mwparserfromhell.parse(oldtext)
-        for template in p.filter_templates(matches="Study"):
+        template = study_template(p)
+        if template:
             logging.debug("Page {} has template {} with these params: {}".format(
                 page.name, template.name.rstrip(), template.params))
 
@@ -77,15 +79,6 @@ def run(mother):
 
         if oldtext.strip() != newtext.strip():
             logging.warning("Updating study page %s, change detected", page.name)
-            """
-            # Debugging stuff
-            with open("old.tmp", "w") as text_file:
-                print(oldtext, file=text_file)
-            with open("new.tmp", "w") as text_file:
-                print(newtext, file=text_file)
-            import sys
-            sys.exit()
-            """
             page.save(newtext, "Automated edit to update study values from JARVIS and NIH")
         else:
             logging.info("Not updating study page %s, text identical", page.name)

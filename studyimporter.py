@@ -3,6 +3,7 @@ import mwparserfromhell
 import logging
 import csv
 import sys
+from utilities import study_template
 
 def importer(mother, row, boilerplate):
     title = row["Study Short Name"]
@@ -19,7 +20,7 @@ def importer(mother, row, boilerplate):
     p.insert(0, boilerplate)
     p.insert(0, "{{Study}}")
 
-    template = p.filter_templates(matches="Study")[0]
+    template = study_template(p)
     template.add("AKA", row["AKA"])
     template.add("PIs", row["PIs"])
     template.add("Project Manager", row["Project Manager"])

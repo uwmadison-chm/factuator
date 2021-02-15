@@ -2,28 +2,38 @@ import mwclient
 import mwparserfromhell
 import logging
 import re
+from utilities import study_template
 
 def run(mother):
     category = mother.categories['Study']
+    all_studies = set()
     status = {}
-    has_status = []
-    missing_status = []
+    has_status = set()
+    missing_status = set()
+    missing_jarvis = set()
+
     for page in category:
         logging.debug("Checking study", page.name)
+        all_studies.add(page.name)
         text = page.text()
         p = mwparserfromhell.parse(text)
-        for template in p.filter_templates():
+        template = study_template(p)
+        if template:
             if template.has("Study Status"):
                 s = template.get("Study Status").value.strip()
                 if s == "": continue
                 words = re.split(r',\s*', s)
                 for c in words:
-                    status[c] = status.get(c, [])
-                    status[c].append(page.name)
-                    has_status.append(page.name)
+                    status[c] = status.get(c, set())
+                    status[c].add(page.name)
+                    has_status.add(page.name)
+
+            if not template.has("JARVIS ID") or \
+                template.get("JARVIS ID").value.strip() == "":
+                missing_jarvis.add(page.name)
 
         if not page.name in has_status:
-            missing_status.append(page.name)
+            missing_status.add(page.name)
 
     logging.debug("Got status: ", status)
 
@@ -59,3 +69,18 @@ def run(mother):
     if oldtext != newpage:
         logging.warning("Updating study category page, change detected")
         category.save(newpage, "Automated edit to build status categories on study library")
+
+    # Now we use the statuses and dates we pulled to edit the "missing Jarvis" and "studies not edited for the longest"
+
+    missing = mother.pages['Studies missing JARVIS IDs']
+    oldtext = missing.text()
+    newpage = ""
+    newpage += "This page is automatically generated.\n\n"
+    newpage += "== Pages missing JARVIS IDs ==\n\n"
+    for page in sorted(missing_jarvis):
+        newpage += f"* [[{page}]]\n"
+
+    if oldtext != newpage:
+        logging.warning("Updating missing JARVIS IDs page, change detected")
+        missing.save(newpage, "Automated edit")
+
