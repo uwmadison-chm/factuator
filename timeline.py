@@ -14,6 +14,22 @@ ten_months = relativedelta(months=10)
 six_months = relativedelta(months=6)
 two_months = relativedelta(months=2)
 
+WIKI_URL = "https://wiki.keck.waisman.wisc.edu/wikis/mother/index.php"
+
+TO_EXTRACT = {
+    'Grant': [
+        'Letter of Intent Due', 'Submission Date',
+    ],
+    'Project': [
+        'Planning Start Date',
+        'Project Start Date', 'Project End Date',
+    ],
+    'Study': [
+        'Start Date', 'End Date',
+        'Planning Start Date', 'Piloting Start Date', 'Collecting Start Date',
+    ],
+}
+
 def color_for_bar_kind(bar_kind):
     if bar_kind == "Planning":
         return '#dae'
@@ -43,8 +59,67 @@ def append_rows(normal_rows, truncated_rows, study, bar_kind, s, e):
     truncated_rows.append("[ '{0}', '{1}', '{2}', new Date({3}, {4}, {5}), new Date({6}, {7}, {8})]".format(
             study, bar_kind, color, s.year, s.month, s.day, e.year, e.month, e.day))
 
+def make_html(title, markup):
+    return \
+"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CHM Timelines: """ + title + """</title>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  background-color: #eee;
+}
 
-def build_chart(chart_items, warnings, links=""):
+.timeline-wrapper {
+  overflow-x: scroll;
+  overflow-y: scroll;
+  width: 100%;
+  min-height: 100px;
+  border: 1px solid #aaa;
+  background-color: #fff;
+}
+
+table {
+  border: 1px solid #1C6EA4;
+  font-size: 120%;
+  background-color: #EEEEEE;
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+}
+table td, table th {
+  border: 1px solid #AAAAAA;
+  padding: 3px 2px;
+}
+table tr:nth-child(even) {
+  background: #D0E4F5;
+}
+table thead {
+  background: #1C6EA4;
+  background: -moz-linear-gradient(top, #5592bb 0%, #327cad 66%, #1C6EA4 100%);
+  background: -webkit-linear-gradient(top, #5592bb 0%, #327cad 66%, #1C6EA4 100%);
+  background: linear-gradient(to bottom, #5592bb 0%, #327cad 66%, #1C6EA4 100%);
+  border-bottom: 2px solid #444444;
+}
+table thead th {
+  font-weight: bold;
+  color: #FFFFFF;
+  border-left: 2px solid #D0E4F5;
+}
+table thead th:first-child {
+  border-left: none;
+}
+
+</style>
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+</head>
+<body>
+"""  + markup + "</body></html>"
+
+def build_chart(category_name, chart_items, warnings, links=""):
     normal_rows = []
     truncated_rows = []
     for item, dates in chart_items.items():
@@ -115,33 +190,6 @@ def build_chart(chart_items, warnings, links=""):
 
 
     preamble = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>CHM Timelines</title>
-<style type="text/css">
-body {
-  font-family: sans-serif;
-  background-color: #eee;
-}
-
-.timeline-wrapper {
-  overflow-x: scroll;
-  overflow-y: scroll;
-  width: 100%;
-  min-height: 100px;
-  border: 1px solid #aaa;
-  background-color: #fff;
-}
-
-</style>
-<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-</head>
-<body>
-
-""" + links + """
-
 <h1>Near Future</h1>
 <div class="timeline-wrapper">
 <div id="near-timeline"></div>
@@ -185,15 +233,40 @@ body {
     drawChart('study-timeline', all, 2000);
   }
 </script>
-
-</body>
-</html>
 """
 
     data1 = "var near = [{}];".format(",\n".join(truncated_rows))
     data2 = "var all = [{}];".format(",\n".join(normal_rows))
 
-    return preamble + data1 + data2 + ending
+    return make_html(f"Chart for category {category_name}", links + preamble + data1 + data2 + ending)
+
+
+def build_table(category, chart_items, links=""):
+    content = [
+        f"<h1>Dates for category {category}</h1>",
+        "<table><thead><tr>"]
+    def add_header(x):
+        content.append(f"<th>{x}</th>")
+    add_header("Name")
+    for x in TO_EXTRACT[category]:
+        add_header(x)
+    content.append("</tr></thead>")
+
+    for item, dates in chart_items.items():
+        content.append("<tr>")
+        content.append(f"<td><a href='{WIKI_URL}/{item}'>{item}</a></td>")
+        def add(x):
+            if dates[x]:
+                content.append("<td>✓</td>")
+            else:
+                content.append("<td></td>")
+        for x in TO_EXTRACT[category]:
+            add(x)
+        content.append("</tr>")
+
+    content.append("</table>")
+    content.append(links)
+    return make_html(f"Dates for category {category}", "\n".join(content))
 
 def fill_hash_dates(warnings, page, template, dates, key):
     if template.has(key):
@@ -223,20 +296,6 @@ def fill_hash_dates(warnings, page, template, dates, key):
 
 
 def run(mother):
-    to_extract = {
-        'Grant': [
-            'Letter of Intent Due', 'Submission Date',
-        ],
-        'Project': [
-            'Planning Start Date',
-            'Project Start Date', 'Project End Date',
-        ],
-        'Study': [
-            'Start Date', 'End Date',
-            'Planning Start Date', 'Piloting Start Date', 'Collecting Start Date',
-        ],
-    }
-
     chart_data = {}
     chart_warnings = {}
     def extract(category_name, date_fields):
@@ -258,20 +317,25 @@ def run(mother):
                     fill_hash_dates(warnings, thing, template, dates, field)
         return data, warnings
 
-    for category_name, fields in to_extract.items():
+    for category_name, fields in TO_EXTRACT.items():
         chart_data[category_name], chart_warnings[category_name] = \
             extract(category_name, fields)
 
-    # TODO: How to write to wiki when JS is outlawed?
-    #chart = mother.pages["CHM Timeline"]
-    #oldtext = chart.text()
-
     # Now we write the chart for each kind
+
+    link_all_timelines = "<h2><a href='index.html'>Back to all timelines</a></h2>"
     for category_name, items in chart_data.items():
         with open(f"/home/dfitch/pub_html/timeline/{category_name}.html", "w") as output:
-            chart_markup = build_chart(items, chart_warnings[category_name],
-                    "<h2><a href='index.html'>Back to all timelines</a></h2>")
-            output.write(chart_markup)
+            chart_markup = build_chart(category_name, items, chart_warnings[category_name],
+                    link_all_timelines +
+                    f"<h2><a href='{category_name}_dates.html'>View {category_name} date report</a></h2>")
+            output.write(chart_markup, )
+
+        with open(f"/home/dfitch/pub_html/timeline/{category_name}_dates.html", "w") as output:
+            markup = build_table(category_name, items,
+                    link_all_timelines +
+                    f"<h2><a href='{category_name}.html'>View {category_name} timeline</a></h2>")
+            output.write(markup)
 
     # Join dictionaries
     all_items = {}
@@ -280,13 +344,13 @@ def run(mother):
     all_items.update(chart_data['Study'])
 
     # And finally the chart of everything joined together
-    chart_markup = build_chart(all_items, [],
+    chart_markup = build_chart("All", all_items, [],
         "<h2><a href='Grant.html'>View only grants</a> | " +
         "<a href='Project.html'>View only projects</a> | " +
         "<a href='Study.html'>View only studies</a></h2>" +
-        "<h2><a href='https://wiki.keck.waisman.wisc.edu/wikis/mother/index.php/Category:Grant'>Wiki grants listing</a> | " +
-        "<a href='https://wiki.keck.waisman.wisc.edu/wikis/mother/index.php/Category:Project'>Wiki projects listing</a> | " +
-        "<a href='https://wiki.keck.waisman.wisc.edu/wikis/mother/index.php/Category:Study'>Wiki studies listing</a></h2>")
+        f"<h2><a href='{WIKI_URL}/Category:Grant'>Wiki grants listing</a> | " +
+        f"<a href='{WIKI_URL}/Category:Project'>Wiki projects listing</a> | " +
+        f"<a href='{WIKI_URL}/Category:Study'>Wiki studies listing</a></h2>")
     with open("/home/dfitch/pub_html/timeline/index.html", "w") as output:
         output.write(chart_markup)
 
