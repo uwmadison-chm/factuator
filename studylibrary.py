@@ -3,6 +3,7 @@ import mwparserfromhell
 import logging
 import re
 from utilities import study_template
+from jarvis import Jarvis
 
 def run(mother):
     category = mother.categories['Study']
@@ -11,6 +12,7 @@ def run(mother):
     has_status = set()
     missing_status = set()
     missing_jarvis = set()
+    jarvis_ids = set()
 
     for page in category:
         logging.debug("Checking study", page.name)
@@ -31,6 +33,8 @@ def run(mother):
             if not template.has("JARVIS ID") or \
                 template.get("JARVIS ID").value.strip() == "":
                 missing_jarvis.add(page.name)
+            else:
+                jarvis_ids.add(int(template.get("JARVIS ID").value.strip()))
 
         if not page.name in has_status:
             missing_status.add(page.name)
@@ -47,9 +51,15 @@ def run(mother):
     newtext += "<div class='mw-category'>"
 
     # Build up an index by status
-    for k in status:
+    # Sort by certain rules
+    sort_order = [
+        "In Development", "Piloting", "Collecting", "Data Collection Complete", 
+        "Analyzing", "Publishing", "IRB Closed"]
+    for k in sort_order:
+        if not k in status:
+            continue
         newtext += "<div class='mw-category-group'><h3>" + k + "</h3>\n"
-        for study in status[k]:
+        for study in sorted(list(status[k])):
             newtext += "* [[" + study + "]]\n"
         newtext += "</div>"
 
@@ -71,16 +81,31 @@ def run(mother):
         category.save(newpage, "Automated edit to build status categories on study library")
 
     # Now we use the statuses and dates we pulled to edit the "missing Jarvis" and "studies not edited for the longest"
-
-    missing = mother.pages['Studies missing JARVIS IDs']
+    missing = mother.pages['Study pages missing JARVIS IDs']
     oldtext = missing.text()
-    newpage = ""
-    newpage += "This page is automatically generated.\n\n"
+    newpage = "This page is automatically generated. See also [[JARVIS IDs missing study pages]]\n\n"
     newpage += "== Pages missing JARVIS IDs ==\n\n"
     for page in sorted(missing_jarvis):
         newpage += f"* [[{page}]]\n"
 
     if oldtext != newpage:
         logging.warning("Updating missing JARVIS IDs page, change detected")
+        missing.save(newpage, "Automated edit")
+
+    # Now we build the opposite thing
+    missing = mother.pages['JARVIS IDs missing study pages']
+    oldtext = missing.text()
+    newpage = "This page is automatically generated and only includes more recent entries in JARVIS. See also [[Study pages missing JARVIS IDs]]\n\n"
+    newpage += "== JARVIS IDs missing study pages ==\n\n"
+
+    j = Jarvis()
+    all_studies = j.select("SELECT id, folder, name, created_at FROM studies ORDER BY created_at DESC LIMIT 30")
+    for s in all_studies:
+        jarvis_id, folder, name, created_at = s
+        if not jarvis_id in jarvis_ids:
+            newpage += f"* ID {jarvis_id} in /study/{folder}: \"{name}\" (created at {created_at})\n"
+
+    if oldtext != newpage:
+        logging.warning("Updating missing study pages page, change detected")
         missing.save(newpage, "Automated edit")
 
