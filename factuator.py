@@ -23,6 +23,7 @@ parser.add_argument('--studyreport', help='Generate CSV report about studies', a
 parser.add_argument('--add-category', nargs=2, metavar=('category', 'match'), help='Add category `category` to pages with `match` in the title')
 parser.add_argument('--rename-category', nargs=2, metavar=('old', 'new'), help='Rename category `old` to `new`')
 parser.add_argument('--rename-regex', nargs=3, metavar=('match', 'regex', 'result'), help='Rename all pages with `match` in the title replacing `regex` with `result`')
+parser.add_argument('--export-gdoc', action='store_true', help='Export to google docs for eventual gdocwiki use [EXPERIMENTAL]')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -91,5 +92,8 @@ elif args.all:
     selfreportlibrary.run(mother)
     import timeline
     timeline.run(mother)
+elif args.export_gdoc:
+    import gdocexporter
+    gdocexporter.run(mother)
 else:
     parser.print_help()

@@ -2,3 +2,6 @@ auth.pickle
 __pycache__
 .venv
 *.csv
+auth*.json
+mappings*.json
+google-test.sh
