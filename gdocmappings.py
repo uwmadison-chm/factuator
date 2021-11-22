@@ -30,6 +30,19 @@ class GDocMappings:
             json.dump(data, f)
 
     def add(self, title, document_id):
+        title = self.normalize(title)
         self.title_to_id[title] = document_id
         self.id_to_title[document_id] = title
         self.save()
+
+    
+    def normalize(self, title):
+        # NOTE: Probably more stuff here
+        return title.replace("_", " ")
+
+    def get_id_for_title(self, title):
+        title = self.normalize(title)
+        if title in self.title_to_id:
+            return self.title_to_id[title]
+        else:
+            return None
