@@ -2,6 +2,7 @@ import mwparserfromhell
 import logging
 import requests
 import os
+import time
 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -10,6 +11,7 @@ from google.oauth2.credentials import Credentials
 
 from gdocmappings import GDocMappings 
 from gdocconverter import GDocConverter
+from gdoclinks import GDocLinks
 
 SCOPES = ['https://www.googleapis.com/auth/documents',
           'https://www.googleapis.com/auth/drive',
@@ -17,8 +19,19 @@ SCOPES = ['https://www.googleapis.com/auth/documents',
           'https://www.googleapis.com/auth/drive.metadata']
 MAPPINGS_FILE = "mappings.google.json"
 
+# Limit to how many parents to request via Drive API
+MAX_PARENTS = 500
+
 class GDocDriver:
-    def __init__(self, mappings_path, file_prefix, http_prefix, drive_id, unsorted_folder_id):
+    """
+    Class that controls a connection to the Drive and Docs APIs
+    and knows how to run conversions from MediaWiki into Docs files.
+
+    Also beginning to add "walking" functionality to run arbitrary
+    updates on docs in a given folder
+    """
+
+    def __init__(self, mappings_path, drive_id):
         """
         GDocDriver needs a path to mappings. See `gdocmappings.py`.
 
@@ -32,13 +45,11 @@ class GDocDriver:
 
         self.mappings = GDocMappings(MAPPINGS_FILE)
         self.initialize_google_services()
-        self.file_prefix = file_prefix
-        self.http_prefix = http_prefix
         self.drive_id = drive_id
-        self.unsorted_folder_id = unsorted_folder_id
+        self.folders = {}
 
 
-    def run_export(self, wiki, wiki_prefix):
+    def run_export(self, wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id):
         """
         Function that does the conversion from mediawiki to gdoc,
         walking the mediawiki pages
@@ -46,19 +57,125 @@ class GDocDriver:
 
         self.wiki = wiki
         self.wiki_prefix = wiki_prefix
-        self.load_folders()
+        self.file_prefix = file_prefix
+        self.http_prefix = http_prefix
+        self.unsorted_folder_id = unsorted_folder_id
+        self.load_common_folders()
 
         # NOTE: For now just pick a single study page
         # self.convert_one("ADNI Study")
         # self.convert_category('Study')
-        self.convert_all_new()
+        if force:
+            self.convert_all()
+        else:
+            self.convert_all_new()
 
         self.mappings.save()
 
-        # TODO: Now we need to walk the pages and 
+
+    def run_check_links(self, folder_id):
+        docs = self.recursive_docs_in_folder(folder_id)
+
+        for doc_id in docs.keys():
+            linker = GDocLinks(self)
+            linker.check_links(doc_id)
 
 
-    def load_folders(self):
+    def recursive_docs_in_folder(self, folder_id):
+        relevant_folders = [folder_id]
+        for folder in self.folders_in_folder(folder_id):
+            relevant_folders.append(folder)
+        return self.get_relevant_files(relevant_folders)
+
+
+    def get_relevant_files(self, relevant_folders):
+        """
+        Get files under the relevant_folders and all their subfolders.
+        """
+        relevant_files = {}
+        chunked_relevant_folders = \
+            [relevant_folders[i:i + MAX_PARENTS] \
+                for i in range(0, len(relevant_folders), MAX_PARENTS)]
+        for folder_list in chunked_relevant_folders:
+            query_term = ' in parents or '.join('"{0}"'.format(f) for f in folder_list) + ' in parents'
+            relevant_files.update(self.get_all_files_in_folders(query_term))
+        return relevant_files
+
+
+    def get_all_files_in_folders(self, parent_folders):
+        """
+        Return a dictionary of file IDs mapped to file names for the specified parent folders.
+        """
+        files_under_folder = {}
+        page_token = None
+        max_allowed_page_size = 1000
+        just_files = f"mimeType != 'application/vnd.google-apps.folder' and trashed = false and ({parent_folders})"
+        while True:
+            results = self.drive.files().list(
+                pageSize=max_allowed_page_size,
+                fields="nextPageToken, files(id, name, mimeType, parents)",
+                includeItemsFromAllDrives=True, supportsAllDrives=True,
+                corpora='drive',
+                driveId=self.drive_id,
+                pageToken=page_token,
+                q=just_files).execute()
+            files = results.get('files', [])
+            page_token = results.get('nextPageToken', None)
+            for file in files:
+                files_under_folder[file['id']] = file['name']
+            if page_token is None:
+                break
+        return files_under_folder
+
+
+    def all_folders_in_drive(self):
+        """
+        Return a dictionary of all the folder IDs in a drive mapped to their 
+        parent folder IDs (or to the drive itself if a top-level folder).
+        This flattens the entire folder structure.
+
+        Note that this caches the result, because for our purposes the
+        folders will not be changing often enough to matter.
+        """
+        if len(self.folders) > 0:
+            return self.folders
+
+        page_token = None
+        max_allowed_page_size = 1000
+        just_folders = "trashed = false and mimeType = 'application/vnd.google-apps.folder'"
+        while True:
+            results = self.drive.files().list(
+                pageSize=max_allowed_page_size,
+                fields="nextPageToken, files(id, name, mimeType, parents)",
+                includeItemsFromAllDrives=True, supportsAllDrives=True,
+                corpora='drive',
+                driveId=self.drive_id,
+                pageToken=page_token,
+                q=just_folders).execute()
+            result_folders = results.get('files', [])
+            page_token = results.get('nextPageToken', None)
+            for folder in result_folders:
+                self.folders[folder['id']] = folder['parents'][0]
+            if page_token is None:
+                break
+
+        return self.folders
+
+
+    def folders_in_folder(self, folder_to_search):
+        """
+        Yield subfolders of the folder-to-search, and then subsubfolders etc.
+        Must be called by an iterator.
+        """
+        # Get all subfolders
+        temp_list = [k for k, v in self.all_folders_in_drive().items() if v == folder_to_search]
+        for sub_folder in temp_list:
+            yield sub_folder
+            # Recurse
+            yield from self.folders_in_folder(sub_folder)
+
+
+    def load_common_folders(self):
         self.category_to_folder = {
             'Study': 'Studies',
             'Self Report Measure': 'Self Report Library',
@@ -100,19 +217,13 @@ class GDocDriver:
         for page in category:
             self.convert(page)
 
-    def convert_all_new(self):
-        skips = [
-            "ADNI Study",
-            "Autism Preprocessing NEW",
-            "Autism Preprocessing Steps",
-            "Automated login to COINS",
-            "Baby Brain and Behavior Project Recruitment",
-            "Baby Brain Behavior Project Recruitment and Contact Information",
-            "Brain Imaging Core Information Policy and Procedure",
-        ]
+    def convert_all(self):
         for page in self.wiki.pages:
-            if not page.name in skips:
-                self.convert(page, only_if_new=True)
+            self.convert(page, only_if_new=False)
+
+    def convert_all_new(self):
+        for page in self.wiki.pages:
+            self.convert(page, only_if_new=True)
 
 
     def initialize_google_services(self):
@@ -181,12 +292,62 @@ class GDocDriver:
             ).execute()
 
 
+
+    def get_document(self, doc_id):
+        return self.docs.documents().get(documentId=doc_id).execute()
+
+
+    def batch_update(self, doc_id, requests, debug=False):
+        """
+        Batch update the document with the given requests.
+
+        If debug is passed, do each request one at a time, slow-ish.
+        """
+        
+        if debug:
+            for r in requests:
+                try:
+                    self.docs.documents().batchUpdate(
+                        documentId=doc_id, body={'requests': [r]}).execute()
+                except BaseException as e:
+                    print(f"Unexpected {e}, {type(e)} with request {r}")
+                    raise
+                time.sleep(0.1)
+
+        else:
+            return self.docs.documents().batchUpdate(
+                documentId=doc_id, body={'requests': requests}).execute()
+
+
+    def traverse(self, f, d, start_index, end_index):
+        """
+        Recursive method to do a common thing we'll be needing a lot:
+        store current start_index and end_index, while traversing
+        the document tree and calling a function `f` on each dict.
+        """
+        if 'startIndex' in d:
+            start_index = d['startIndex']
+
+        if 'endIndex' in d:
+            end_index = d['endIndex']
+
+        f(d, start_index, end_index)
+
+        for key, value in d.items():
+            if isinstance(value, dict):
+                self.traverse(f, value, start_index, end_index)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        self.traverse(f, item, start_index, end_index)
+
+
     def convert(self, page, only_if_new=False, debug=False):
         if page.name in self.mappings.title_to_id:
             if only_if_new:
                 return
             doc_id = self.mappings.title_to_id[page.name]
-            document = self.docs.documents().get(documentId=doc_id).execute()
+            document = self.get_document(doc_id)
             logging.info(f"Converting {page.name} into existing doc {doc_id}")
         else:
             full_title = page.name
@@ -226,6 +387,7 @@ class GDocDriver:
             logging.info(f"Converting {page.name} into new doc {doc_id} in folder {folder_id}")
 
         c = GDocConverter(
+                self,
                 self.wiki,
                 self.wiki_prefix,
                 self.docs,
@@ -235,7 +397,11 @@ class GDocDriver:
         c.convert(page, doc_id, debug=debug)
 
 
-def export_mediawiki(wiki, wiki_prefix, file_prefix, http_prefix, drive_id, unsorted_folder_id):
-    x = GDocDriver(MAPPINGS_FILE, file_prefix, http_prefix, drive_id, unsorted_folder_id)
-    x.run_export(wiki, wiki_prefix)
+def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_id, unsorted_folder_id):
+    x = GDocDriver(MAPPINGS_FILE, drive_id)
+    x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id)
 
+
+def link(drive_id, folder_id):
+    x = GDocDriver(MAPPINGS_FILE, drive_id)
+    x.run_check_links(folder_id)

@@ -50,7 +50,8 @@ class GDocConverter:
     from `http_prefix`
     """
 
-    def __init__(self, wiki, wiki_prefix, docs, mappings, file_prefix, http_prefix):
+    def __init__(self, driver, wiki, wiki_prefix, docs, mappings, file_prefix, http_prefix):
+        self.driver = driver
         self.wiki = wiki
         self.wiki_prefix = wiki_prefix
         self.docs = docs
@@ -113,7 +114,10 @@ class GDocConverter:
             else:
                 flat_requests.append(x)
 
-        self.batch_update(flat_requests, debug=debug)
+        self.driver.batch_update(self.doc_id, flat_requests, debug=debug)
+
+        # Hitting some Google api limits, so let's sleep a bit here
+        time.sleep(10.0)
 
 
     def node_to_text(self, node):
@@ -289,35 +293,13 @@ class GDocConverter:
         if idxend <= 2:
             # Doc already empty
             return
-        self.batch_update([{
+        self.driver.batch_update(self.doc_id, [{
             'deleteContentRange': {
                 'range': {
                     'startIndex': 1,
                     'endIndex': idxend-1,
                 }
             }}])
-
-
-    def batch_update(self, requests, debug=False):
-        """
-        Batch update the document with the given requests.
-
-        If debug is passed, do each request one at a time.
-        """
-        
-        if debug:
-            for r in requests:
-                try:
-                    self.docs.documents().batchUpdate(
-                        documentId=self.doc_id, body={'requests': [r]}).execute()
-                except BaseException as e:
-                    print(f"Unexpected {e}, {type(e)} with request {r}")
-                    raise
-                time.sleep(0.1)
-
-        else:
-            return self.docs.documents().batchUpdate(
-                documentId=self.doc_id, body={'requests': requests}).execute()
 
 
     def format_text(self, idx, idxend, is_bold, is_italic, is_underline):
@@ -490,11 +472,8 @@ class GDocConverter:
 
 
 
-    def get_document(self):
-        return self.docs.documents().get(documentId=self.doc_id).execute()
-
     def get_content(self):
-        return self.get_document().get('body').get('content')
+        return self.driver.get_document(self.doc_id).get('body').get('content')
 
 
     def get_last_index(self):

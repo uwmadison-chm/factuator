@@ -4,4 +4,4 @@ __pycache__
 *.csv
 auth*.json
 mappings*.json
-google-test.sh
+google-*.sh
