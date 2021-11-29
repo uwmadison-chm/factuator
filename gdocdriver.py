@@ -404,4 +404,6 @@ def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_i
 
 def link(drive_id, folder_id):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
+    x.mappings.ids_that_link_to_id = {}
     x.run_check_links(folder_id)
+    x.mappings.save()

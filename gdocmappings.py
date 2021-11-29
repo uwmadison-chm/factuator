@@ -9,12 +9,14 @@ class GDocMappings:
                 data = json.load(json_file)
                 self.title_to_id = data['title_to_id']
                 self.id_to_title = data['id_to_title']
+                self.ids_that_link_to_id = data['ids_that_link_to_id']
                 self.do_not_convert = data['do_not_convert']
-                self.file_to_id = data['do_not_convert']
+                self.file_to_id = data['file_to_id']
 
         else:
             self.title_to_id = {}
             self.id_to_title = {}
+            self.ids_that_link_to_id = {}
             self.do_not_convert = []
             self.file_to_id = {}
 
@@ -22,6 +24,7 @@ class GDocMappings:
         data = {
             'title_to_id': self.title_to_id,
             'id_to_title': self.id_to_title,
+            'ids_that_link_to_id': self.ids_that_link_to_id,
             'do_not_convert': self.do_not_convert,
             'file_to_id': self.file_to_id,
         }
