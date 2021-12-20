@@ -49,7 +49,7 @@ class GDocDriver:
         self.folders = {}
 
 
-    def run_export(self, wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id):
+    def run_export(self, wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title):
         """
         Function that does the conversion from mediawiki to gdoc,
         walking the mediawiki pages
@@ -60,15 +60,18 @@ class GDocDriver:
         self.file_prefix = file_prefix
         self.http_prefix = http_prefix
         self.unsorted_folder_id = unsorted_folder_id
-        self.load_common_folders()
 
-        # NOTE: For now just pick a single study page
-        # self.convert_one("ADNI Study")
-        # self.convert_category('Study')
-        if force:
-            self.convert_all()
+        if page_title:
+            # We don't need to load common folders if the doc already exists
+            if not page_title in self.mappings.title_to_id:
+                self.load_common_folders()
+            self.convert_one(page_title)
         else:
-            self.convert_all_new()
+            self.load_common_folders()
+            if force:
+                self.convert_all()
+            else:
+                self.convert_all_new()
 
         self.mappings.save()
 
@@ -210,7 +213,7 @@ class GDocDriver:
 
     def convert_one(self, title):
         page = self.wiki.pages[title]
-        self.convert(page, debug=True)
+        self.convert(page)
 
     def convert_category(self, category_name):
         category = self.wiki.categories[category_name]
@@ -397,9 +400,9 @@ class GDocDriver:
         c.convert(page, doc_id, debug=debug)
 
 
-def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_id, unsorted_folder_id):
+def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_id, unsorted_folder_id, page_title=None):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
-    x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id)
+    x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title)
 
 
 def link(drive_id, folder_id):

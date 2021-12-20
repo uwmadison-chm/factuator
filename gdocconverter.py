@@ -90,14 +90,6 @@ class GDocConverter:
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
         requests += self.insert_link(1, "Original wiki location\n", self.wiki_prefix + str(page.name)) 
 
-        #### TESTING CODE, adds fake content
-        # requests += self.insert_text(1, "Should be normal\n") 
-        # requests += self.insert_text(1, "Continuing normal\n") 
-        # requests += self.insert_heading_text(1, "Should be heading 1\n", level='HEADING_1') 
-        # requests += self.insert_text(1, "Intro to this normal\n") 
-        # requests += self.insert_heading_text(1, "Should be heading 2\n", level='HEADING_2') 
-        # requests += self.insert_text(1, "Should be normal, again\n") 
-
         for node in nodes:
             # NOTE: It's going to get way funkier if we need to maintain AST context,
             # but so far the only thing that requires context are bullets, which show up
@@ -263,6 +255,7 @@ class GDocConverter:
                     requests.append(self.insert_text(1, "\n"))
                 else:
                     requests.append(self.insert_text(1, text))
+
             elif "'" in str(node.wiki_markup):
                 logging.info(f"Skipping bold/italic")
             elif "---" in str(node.wiki_markup):
@@ -320,7 +313,7 @@ class GDocConverter:
                     'italic': is_italic,
                     'underline': is_underline
                 },
-                'fields': 'bold, italic'
+                'fields': 'bold, italic, underline'
             }}]
 
         return req
@@ -374,7 +367,7 @@ class GDocConverter:
                 'updateParagraphStyle': {
                     'range': {
                         'startIndex': idx,
-                        'endIndex':  idx # + len(text) # we don't extend because this gets the line we want correctly (maybe)
+                        'endIndex':  idx
                     },
                     'paragraphStyle': {
                         'namedStyleType': level,

@@ -20,7 +20,7 @@ class GDocLinks:
         content = document['body']['content']
         requests = []
 
-        doc_id_regex = re.compile('docs.google.com/document/d/([^/]+)', re.IGNORECASE)
+        doc_id_regex = re.compile('docs.google.com/document/d/([^/]{40,})', re.IGNORECASE)
 
         # Now we walk the AST looking for links
         # Links are stored as 'link' properties inside the 'textStyle'
@@ -30,7 +30,10 @@ class GDocLinks:
                 return False
 
             link = element['link']
-            url = link['url']
+            if 'url' in link:
+                url = link['url']
+            else:
+                return False
 
             if url.startswith("wiki://"):
                 # Check in mappings for something with that title
