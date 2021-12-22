@@ -70,9 +70,6 @@ class GDocConverter:
 
         self.doc_id = doc_id
 
-        oldtext = page.text()
-        p = mwparserfromhell.parse(oldtext)
-
         # If we were really fancy, we would try to do merging of content.
         # But we're just going to brute force override old content.
         self.clear_document()
@@ -84,19 +81,11 @@ class GDocConverter:
         # Or will it because of nested lists???? yarrrrrr
         requests = []
 
-        nodes = list(p.nodes)
-        last = NodeResponse()
-
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
         requests += self.insert_link(1, "Original wiki location\n", self.wiki_prefix + str(page.name)) 
 
-        for node in nodes:
-            # NOTE: It's going to get way funkier if we need to maintain AST context,
-            # but so far the only thing that requires context are bullets, which show up
-            # as a Tag with markup '*' and then the following text is a bullet
-            logging.debug(f"Converting node {node} with status {last}")
-            result = self.node_to_requests(node, requests, last)
-            last = result
+        oldtext = page.text()
+        self.wiki_markup_to_requests(oldtext, requests)
 
         requests = list(reversed(requests))
         flat_requests = []
@@ -108,8 +97,30 @@ class GDocConverter:
 
         self.driver.batch_update(self.doc_id, flat_requests, debug=debug)
 
-        # Hitting some Google api limits, so let's sleep a bit here
-        time.sleep(10.0)
+
+    def wiki_markup_to_requests(self, markup, requests, start_index=1):
+        """
+        Turn Mediawiki markup into a series of Google Docs API requests.
+
+        Note that it mutates requests in place because the `node_to_requests`
+        function returns stateful NodeResponse. Better way would be to combine
+        requests into that state object, but that's hard and confusing so
+        I'm leaving this as is for now.
+
+        `start_index` is usually 1, where we are inserting into the doc,
+        because we're going in reverse. But sometimes inside tables we might
+        need to insert at a different specific index.
+        """
+        p = mwparserfromhell.parse(markup)
+        nodes = list(p.nodes)
+        last_status = NodeResponse()
+
+        for node in nodes:
+            # NOTE: It's going to get way funkier if we need to maintain AST context,
+            # but so far the only thing that requires context are bullets, which show up
+            # as a Tag with markup '*' and then the following text is a bullet
+            result = self.node_to_requests(node, requests, last_status, start_index=start_index)
+            last_status = result
 
 
     def node_to_text(self, node):
@@ -124,7 +135,7 @@ class GDocConverter:
     def is_image(self, name):
         return name.endswith(".jpg") or name.endswith(".png") or name.endswith(".gif")
 
-    def node_to_requests(self, node, requests, last):
+    def node_to_requests(self, node, requests, last_status, start_index=1):
         if isinstance(node, mwparserfromhell.nodes.comment.Comment):
             logging.debug(f"Skipping comment: {str(node)}")
 
@@ -137,16 +148,16 @@ class GDocConverter:
             text = re.sub(r"(.|\s)\n(.|\s)", r"\1\2", text)
             if text == '' or not text:
                 # Don't insert anything
-                return NodeResponse()
+                return last_status
             # TODO: Probably want to trim extra newlines here
-            if last and last.is_bullet():
+            if last_status and last_status.is_bullet():
                 # TODO: Bullet/indent level? How?
                 # https://developers.google.com/docs/api/how-tos/lists
                 # TODO: insert_bullet_text is way too happy at inserting bullets
                 # requests.append(self.insert_bullet_text(1, str(node)))
-                requests.append(self.insert_text(1, text))
+                requests.append(self.insert_text(start_index, text))
             else:
-                requests.append(self.insert_text(1, text))
+                requests.append(self.insert_text(start_index, text))
 
         elif isinstance(node, mwparserfromhell.nodes.heading.Heading): 
             original_text = str(node)
@@ -155,7 +166,7 @@ class GDocConverter:
             text = re.sub("(^=+|=+$)", "", original_text, 2)
             text = re.sub("'{2,}", "", text)
             text = text.strip()
-            requests.append(self.insert_heading_text(1, text, level))
+            requests.append(self.insert_heading_text(start_index, text, level))
 
         elif isinstance(node, mwparserfromhell.nodes.wikilink.Wikilink):
             if node.title is None:
@@ -194,22 +205,23 @@ class GDocConverter:
 
                     # TODO: Consider extracting width from thumb_params and passing along?
                     logging.info(f"Trying to insert image at url: {uri}")
-                    requests.append(self.insert_image(1, uri))
-                    requests.append(self.insert_text(1, additional_text))
+                    requests.append(self.insert_image(start_index, uri))
+                    requests.append(self.insert_text(start_index, additional_text))
                 else:
                     # Insert link to file that we'll fix up in a second pass
                     url = "wiki://" + title
             else:
-                requests.append(self.insert_link(1, text, url))
+                requests.append(self.insert_link(start_index, text, url))
 
         elif isinstance(node, mwparserfromhell.nodes.external_link.ExternalLink):
             text = self.node_to_text(node.title).strip()
             url = self.node_to_text(node.url)
             if text == "":
                 text = url
-            requests.append(self.insert_link(1, text, url))
+            requests.append(self.insert_link(start_index, text, url))
 
         elif isinstance(node, mwparserfromhell.nodes.tag.Tag): 
+            # TODO: this cancels any other formatting in NodeResponse state?
             if node.wiki_markup == '*':
                 return NodeResponse(is_bullet=True, level=1) 
             elif node.wiki_markup == '**':
@@ -235,8 +247,7 @@ class GDocConverter:
             elif node.wiki_markup == '######':
                 return NodeResponse(is_numeric_bullet=True, level=6) 
             elif node.wiki_markup == '{|':
-                logging.info(f"Skipping table")
-                requests.append(self.insert_text(1, "<table goes here>"))
+                requests.append(self.insert_table(start_index, node))
             elif node.wiki_markup is None:
                 text = str(node)
                 logging.info(f"No markup in tag? Likely raw html: {text}")
@@ -252,9 +263,9 @@ class GDocConverter:
                 # <sup />
                 # <s />
                 if text == "<br>":
-                    requests.append(self.insert_text(1, "\n"))
+                    requests.append(self.insert_text(start_index, "\n"))
                 else:
-                    requests.append(self.insert_text(1, text))
+                    requests.append(self.insert_text(start_index, text))
 
             elif "'" in str(node.wiki_markup):
                 logging.info(f"Skipping bold/italic")
@@ -267,18 +278,18 @@ class GDocConverter:
             # Just output the Unicode version and hope that works?
             text = node.normalize()
             if text:
-                requests.append(self.insert_text(1, text))
+                requests.append(self.insert_text(start_index, text))
 
         elif isinstance(node, mwparserfromhell.nodes.template.Template): 
             template_name = node.name.strip() 
-            requests.append(self.insert_text(1, f"<template for {template_name} goes here>"))
+            requests.append(self.insert_text(start_index, f"<template for {template_name} goes here>"))
             logging.info(f"Skipping template, probably deal with these after tables are working?")
 
         else:
             cls = str(node.__class__)
             logging.warning(f"Got node with class {cls}, skipping")
 
-        return NodeResponse()
+        return last_status
 
 
     def clear_document(self):
@@ -463,6 +474,46 @@ class GDocConverter:
             }
         ]]
 
+
+    def insert_table(self, idx, node):
+        """
+        Create table.
+        """
+
+        rows = node.contents.split("|-")
+        # Not sure how header exclamations in wikitable markup are escaped?
+        # Here we're just going to eat whether a row is a header and not try
+        # to format it at all
+        rows[0] = rows[0].replace("!", "|")
+        split_rows = [r.split("|") for r in rows]
+        max_columns = max([len(r) for r in split_rows])
+
+        requests = [
+            { 'insertTable': {
+                'location': { 'index': idx, },
+                'rows': len(rows),
+                'columns': max_columns }}]
+
+        cell_requests = []
+
+        for i, row in enumerate(split_rows):
+            for j, cell in enumerate(row):
+                text = cell.strip()
+                if text:
+                    # complicated math to find index location of a given cell 
+                    # in the crazy google docs json tree counting system, yuck
+                    index = (3 + i + max_columns * i * 2) + (j + 1) * 2
+
+                    # Now we parse the cell's content and convert that, too, 
+                    # because it could have links and what not
+                    self.wiki_markup_to_requests(text, cell_requests, index)
+
+        requests.extend(reversed(cell_requests))
+
+        # Remember, we have to wrap the list of actions in another list
+        # so it doesn't get reversed, we've already set it up to happen
+        # exactly in the order we want
+        return [requests]
 
 
     def get_content(self):

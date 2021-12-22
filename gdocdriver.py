@@ -220,13 +220,15 @@ class GDocDriver:
         for page in category:
             self.convert(page)
 
-    def convert_all(self):
+    def convert_all(self, only_if_new=False):
         for page in self.wiki.pages:
-            self.convert(page, only_if_new=False)
+            self.convert(page, only_if_new=only_if_new)
+
+            # Hitting some Google api limits, so let's sleep a bit here
+            time.sleep(10.0)
 
     def convert_all_new(self):
-        for page in self.wiki.pages:
-            self.convert(page, only_if_new=True)
+        self.convert_all(True)
 
 
     def initialize_google_services(self):
