@@ -14,24 +14,38 @@ class BulletKind(Enum):
     NUMERIC = 2
 
 class NodeResponse:
-    def __init__(self, is_bullet=False, is_numeric_bullet=False, level=0):
-        if is_bullet:
-            self.kind = NodeResponseKind.BULLET
-            self.bullet_kind = BulletKind.NORMAL
-            self.level = level
-        elif is_numeric_bullet:
-            self.kind = NodeResponseKind.BULLET
-            self.bullet_kind = BulletKind.NUMERIC
-            self.level = level
-        else:
-            self.kind = NodeResponseKind.NONE
+    def __init__(self):
+        self.kind = NodeResponseKind.NONE
+        self.is_bold = False
+        self.is_italic = False
 
     def is_bullet(self):
         return self.kind == NodeResponseKind.BULLET
 
+    def toggle_bold(self):
+        self.is_bold = not self.is_bold
+        return self
+
+    def toggle_italic(self):
+        self.is_italic = not self.is_italic
+        return self
+
+    def set_bullet(self, level):
+        self.kind = NodeResponseKind.BULLET
+        self.bullet_kind = BulletKind.NORMAL
+        self.level = level
+        return self
+
+    def set_numeric_bullet(self, level):
+        self.kind = NodeResponseKind.BULLET
+        self.bullet_kind = BulletKind.NORMAL
+        self.level = level
+        return self
+
     def __str__(self):
+        s = ""
         if self.is_bullet():
-            return "Bullet"
+            return "* "
         else:
             return "None"
 
@@ -77,15 +91,13 @@ class GDocConverter:
         # Note that the Google Docs API recommends that you "create
         # backwards" because of the indexes changing on edits.
         # So we insert everything at index 1 and then flip the order of operations
-        # Except this won't work for bullets or other operations that do more than one thing?
-        # Or will it because of nested lists???? yarrrrrr
         requests = []
 
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
         requests += self.insert_link(1, "Original wiki location\n", self.wiki_prefix + str(page.name)) 
 
         oldtext = page.text()
-        self.wiki_markup_to_requests(oldtext, requests)
+        requests.extend(self.wiki_markup_to_requests(oldtext))
 
         requests = list(reversed(requests))
         flat_requests = []
@@ -98,7 +110,7 @@ class GDocConverter:
         self.driver.batch_update(self.doc_id, flat_requests, debug=debug)
 
 
-    def wiki_markup_to_requests(self, markup, requests, start_index=1):
+    def wiki_markup_to_requests(self, markup, start_index=1):
         """
         Turn Mediawiki markup into a series of Google Docs API requests.
 
@@ -111,6 +123,7 @@ class GDocConverter:
         because we're going in reverse. But sometimes inside tables we might
         need to insert at a different specific index.
         """
+        requests = []
         p = mwparserfromhell.parse(markup)
         nodes = list(p.nodes)
         last_status = NodeResponse()
@@ -122,6 +135,8 @@ class GDocConverter:
             result = self.node_to_requests(node, requests, last_status, start_index=start_index)
             last_status = result
 
+        return requests
+
 
     def node_to_text(self, node):
         # NOTE: Again, we're losing formatting inside if there is any, and 
@@ -132,10 +147,12 @@ class GDocConverter:
         remove_toc = re.sub("__NOTOC__\n*", "", reduce_newlines)
         return remove_toc
 
+
     def is_image(self, name):
         return name.endswith(".jpg") or name.endswith(".png") or name.endswith(".gif")
 
-    def node_to_requests(self, node, requests, last_status, start_index=1):
+
+    def node_to_requests(self, node, requests, status, start_index=1):
         if isinstance(node, mwparserfromhell.nodes.comment.Comment):
             logging.debug(f"Skipping comment: {str(node)}")
 
@@ -148,16 +165,16 @@ class GDocConverter:
             text = re.sub(r"(.|\s)\n(.|\s)", r"\1\2", text)
             if text == '' or not text:
                 # Don't insert anything
-                return last_status
+                return status
             # TODO: Probably want to trim extra newlines here
-            if last_status and last_status.is_bullet():
+            if status and status.is_bullet():
                 # TODO: Bullet/indent level? How?
                 # https://developers.google.com/docs/api/how-tos/lists
                 # TODO: insert_bullet_text is way too happy at inserting bullets
                 # requests.append(self.insert_bullet_text(1, str(node)))
-                requests.append(self.insert_text(start_index, text))
+                requests.append(self.insert_text(start_index, text, status))
             else:
-                requests.append(self.insert_text(start_index, text))
+                requests.append(self.insert_text(start_index, text, status))
 
         elif isinstance(node, mwparserfromhell.nodes.heading.Heading): 
             original_text = str(node)
@@ -221,31 +238,30 @@ class GDocConverter:
             requests.append(self.insert_link(start_index, text, url))
 
         elif isinstance(node, mwparserfromhell.nodes.tag.Tag): 
-            # TODO: this cancels any other formatting in NodeResponse state?
             if node.wiki_markup == '*':
-                return NodeResponse(is_bullet=True, level=1) 
+                return status.set_bullet(level=1) 
             elif node.wiki_markup == '**':
-                return NodeResponse(is_bullet=True, level=2) 
+                return status.set_bullet(level=2) 
             elif node.wiki_markup == '***':
-                return NodeResponse(is_bullet=True, level=3) 
+                return status.set_bullet(level=3) 
             elif node.wiki_markup == '****':
-                return NodeResponse(is_bullet=True, level=4) 
+                return status.set_bullet(level=4) 
             elif node.wiki_markup == '*****':
-                return NodeResponse(is_bullet=True, level=5) 
+                return status.set_bullet(level=5) 
             elif node.wiki_markup == '******':
-                return NodeResponse(is_bullet=True, level=6) 
+                return status.set_bullet(level=6) 
             elif node.wiki_markup == '#':
-                return NodeResponse(is_numeric_bullet=True, level=1) 
+                return status.set_numeric_bullet(level=1) 
             elif node.wiki_markup == '##':
-                return NodeResponse(is_numeric_bullet=True, level=2) 
+                return status.set_numeric_bullet(level=2) 
             elif node.wiki_markup == '###':
-                return NodeResponse(is_numeric_bullet=True, level=3) 
+                return status.set_numeric_bullet(level=3) 
             elif node.wiki_markup == '####':
-                return NodeResponse(is_numeric_bullet=True, level=4) 
+                return status.set_numeric_bullet(level=4) 
             elif node.wiki_markup == '#####':
-                return NodeResponse(is_numeric_bullet=True, level=5) 
+                return status.set_numeric_bullet(level=5) 
             elif node.wiki_markup == '######':
-                return NodeResponse(is_numeric_bullet=True, level=6) 
+                return status.set_numeric_bullet(level=6) 
             elif node.wiki_markup == '{|':
                 requests.append(self.insert_table(start_index, node))
             elif node.wiki_markup is None:
@@ -265,17 +281,32 @@ class GDocConverter:
                 if text == "<br>":
                     requests.append(self.insert_text(start_index, "\n"))
                 else:
-                    requests.append(self.insert_text(start_index, text))
+                    # TODO: better HTML stripping from a library would be smart
+                    text = re.sub('<[^<]+?>', '', text)
+                    requests.append(self.insert_text(start_index, text, status))
 
-            elif "'" in str(node.wiki_markup):
-                logging.info(f"Skipping bold/italic")
+            elif "''" in str(node.wiki_markup):
+                def toggle():
+                    if node.wiki_markup == "'''''":
+                        status.toggle_bold()
+                        status.toggle_italic()
+                    elif node.wiki_markup == "'''":
+                        status.toggle_bold()
+                    elif node.wiki_markup == "''":
+                        status.toggle_italic()
+
+                clean = re.sub("'{2,}", "", str(node))
+                toggle()
+                requests.append(self.insert_text(start_index, clean, status))
+                toggle()
+
             elif "---" in str(node.wiki_markup):
                 logging.info(f"Skipping horizontal rule")
             else:
                 logging.warning(f"Got unknown Tag node with markup {node.wiki_markup}, skipping")
 
         elif isinstance(node, mwparserfromhell.nodes.html_entity.HTMLEntity): 
-            # Just output the Unicode version and hope that works?
+            # Just output the Unicode version of whatever this is
             text = node.normalize()
             if text:
                 requests.append(self.insert_text(start_index, text))
@@ -283,13 +314,13 @@ class GDocConverter:
         elif isinstance(node, mwparserfromhell.nodes.template.Template): 
             template_name = node.name.strip() 
             requests.append(self.insert_text(start_index, f"<template for {template_name} goes here>"))
-            logging.info(f"Skipping template, probably deal with these after tables are working?")
+            logging.info(f"Skipping template")
 
         else:
             cls = str(node.__class__)
             logging.warning(f"Got node with class {cls}, skipping")
 
-        return last_status
+        return status
 
 
     def clear_document(self):
@@ -330,7 +361,7 @@ class GDocConverter:
         return req
 
 
-    def insert_text(self, idx, text):
+    def insert_text(self, idx, text, status=None):
         """
         Create text.
         """
@@ -338,25 +369,45 @@ class GDocConverter:
         if text == "" or not text:
             return []
 
-        return [[{
+        insert = {
             'insertText': {
                 'location': {
                     'index': idx,
                 },
                 'text': text
-            }}, {
-                'updateParagraphStyle': {
+            }
+        }
+
+        update_para = {
+            'updateParagraphStyle': {
+                'range': {
+                    'startIndex': idx,
+                    'endIndex':  idx
+                },
+                'paragraphStyle': {
+                    'namedStyleType': 'NORMAL_TEXT',
+                },
+                'fields': 'namedStyleType'
+            }
+        }
+
+        if status and (status.is_bold or status.is_italic):
+            update_text = {
+                'updateTextStyle': {
                     'range': {
                         'startIndex': idx,
-                        'endIndex':  idx
+                        'endIndex': idx + len(text)
                     },
-                    'paragraphStyle': {
-                        'namedStyleType': 'NORMAL_TEXT',
+                    'textStyle': {
+                        'bold': status.is_bold,
+                        'italic': status.is_italic,
                     },
-                    'fields': 'namedStyleType'
+                    'fields': 'bold, italic'
                 }
-            }]]
-
+            }
+            return [[insert, update_para, update_text]]
+        else:
+            return [[insert, update_para]]
 
     def insert_heading_text(self, idx, text, level='HEADING_1'):
         """
@@ -475,17 +526,19 @@ class GDocConverter:
         ]]
 
 
-    def insert_table(self, idx, node):
+    def insert_table(self, idx, markup):
         """
-        Create table.
+        Create table, given the raw mediawiki markup
         """
 
-        rows = node.contents.split("|-")
+        rows = markup.contents.split("|-")
         # Not sure how header exclamations in wikitable markup are escaped?
         # Here we're just going to eat whether a row is a header and not try
         # to format it at all
         rows[0] = rows[0].replace("!", "|")
-        split_rows = [r.split("|") for r in rows]
+        # NOTE: Naive split on "|" breaks on tables with links that use |,
+        # so the ^|\n here is a bad hack to get by those
+        split_rows = [re.split(r"(?:^|\n)\|", r)[1:] for r in rows]
         max_columns = max([len(r) for r in split_rows])
 
         requests = [
@@ -500,13 +553,15 @@ class GDocConverter:
             for j, cell in enumerate(row):
                 text = cell.strip()
                 if text:
-                    # complicated math to find index location of a given cell 
+                    # Complicated math to find index location of a given cell 
                     # in the crazy google docs json tree counting system, yuck
                     index = (3 + i + max_columns * i * 2) + (j + 1) * 2
 
                     # Now we parse the cell's content and convert that, too, 
                     # because it could have links and what not
-                    self.wiki_markup_to_requests(text, cell_requests, index)
+                    cell_requests.extend(self.wiki_markup_to_requests(text, index))
+
+                    # TODO: Links not getting output here???
 
         requests.extend(reversed(cell_requests))
 
