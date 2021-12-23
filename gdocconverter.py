@@ -94,7 +94,7 @@ class GDocConverter:
         requests = []
 
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
-        requests += self.insert_link(1, "Original wiki location\n", self.wiki_prefix + str(page.name)) 
+        requests += self.insert_link(1, "Original wiki location\n\n", self.wiki_prefix + str(page.name)) 
 
         oldtext = page.text()
         requests.extend(self.wiki_markup_to_requests(oldtext))
@@ -124,28 +124,47 @@ class GDocConverter:
         need to insert at a different specific index.
         """
         requests = []
-        p = mwparserfromhell.parse(markup)
+        p = mwparserfromhell.parse(self.cleanup_markup(markup))
         nodes = list(p.nodes)
         last_status = NodeResponse()
 
+        # Now just loop over the nodes, accumulating the last status
         for node in nodes:
-            # NOTE: It's going to get way funkier if we need to maintain AST context,
-            # but so far the only thing that requires context are bullets, which show up
-            # as a Tag with markup '*' and then the following text is a bullet
-            result = self.node_to_requests(node, requests, last_status, start_index=start_index)
-            last_status = result
+            last_status = self.node_to_requests(node, requests, last_status, start_index=start_index)
 
         return requests
 
 
+    def cleanup_markup(self, text):
+        """
+        Initial pass to cleanup the mediawiki linefeeds and stuff that we don't
+        want to even have in the parse.
+
+        Mostly tries to remove extra line feeds in between text; mediawiki 
+        does not break there when displaying (impedance mismatch between docs 
+        and html whitespace)
+        """
+        text = re.sub(r"(\w) *\n *(\w)", r"\1 \2", text)
+        # Cleaning up space around headings
+        text = re.sub("=\n{2,}", "=\n", text)
+        text = re.sub("\n{2,}=", "\n=", text)
+        text = re.sub("\n{2,}", "\n\n", text)
+        text = re.sub("__NOTOC__\n*", "", text)
+        return text
+
+
     def node_to_text(self, node):
-        # NOTE: Again, we're losing formatting inside if there is any, and 
-        # probably doing the wrong thing for some kinds of content
+        """
+        Turn a mwparserfromhell node into plaintext.
+
+        NOTE: Again, this makes us losing formatting inside (if there is any), 
+        and is probably doing the wrong thing for some kinds of content
+        """
+
         if node is None:
             return ''
-        reduce_newlines = re.sub("\n{2,}", "\n", str(node))
-        remove_toc = re.sub("__NOTOC__\n*", "", reduce_newlines)
-        return remove_toc
+        
+        return str(node)
 
 
     def is_image(self, name):
@@ -159,10 +178,6 @@ class GDocConverter:
         elif isinstance(node, mwparserfromhell.nodes.text.Text):
             text = self.node_to_text(node)
 
-            # Try to remove extra line feeds in between text;
-            # mediawiki does not break there when displaying
-            # (impedance mismatch between docs and html whitespace)
-            text = re.sub(r"(.|\s)\n(.|\s)", r"\1\2", text)
             if text == '' or not text:
                 # Don't insert anything
                 return status
@@ -382,7 +397,7 @@ class GDocConverter:
             'updateParagraphStyle': {
                 'range': {
                     'startIndex': idx,
-                    'endIndex':  idx
+                    'endIndex':  idx + len(text)
                 },
                 'paragraphStyle': {
                     'namedStyleType': 'NORMAL_TEXT',
