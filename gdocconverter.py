@@ -18,6 +18,7 @@ class NodeResponse:
         self.kind = NodeResponseKind.NONE
         self.is_bold = False
         self.is_italic = False
+        self.last_was_heading = False
 
     def is_bullet(self):
         return self.kind == NodeResponseKind.BULLET
@@ -40,6 +41,14 @@ class NodeResponse:
         self.kind = NodeResponseKind.BULLET
         self.bullet_kind = BulletKind.NORMAL
         self.level = level
+        return self
+
+    def set_heading(self):
+        self.last_was_heading = True
+        return self
+
+    def unset_heading(self):
+        self.last_was_heading = False
         return self
 
     def __str__(self):
@@ -95,9 +104,11 @@ class GDocConverter:
 
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
         requests += self.insert_link(1, "Original wiki location\n\n", self.wiki_prefix + str(page.name)) 
+        status = NodeResponse()
+        status.set_heading()
 
         oldtext = page.text()
-        requests.extend(self.wiki_markup_to_requests(oldtext))
+        requests.extend(self.wiki_markup_to_requests(oldtext, status=status))
 
         requests = list(reversed(requests))
         flat_requests = []
@@ -110,7 +121,7 @@ class GDocConverter:
         self.driver.batch_update(self.doc_id, flat_requests, debug=debug)
 
 
-    def wiki_markup_to_requests(self, markup, start_index=1):
+    def wiki_markup_to_requests(self, markup, start_index=1, status=None):
         """
         Turn Mediawiki markup into a series of Google Docs API requests.
 
@@ -126,11 +137,12 @@ class GDocConverter:
         requests = []
         p = mwparserfromhell.parse(self.cleanup_markup(markup))
         nodes = list(p.nodes)
-        last_status = NodeResponse()
+        if not status:
+            status = NodeResponse()
 
         # Now just loop over the nodes, accumulating the last status
         for node in nodes:
-            last_status = self.node_to_requests(node, requests, last_status, start_index=start_index)
+            status = self.node_to_requests(node, requests, status, start_index=start_index)
 
         return requests
 
@@ -199,6 +211,7 @@ class GDocConverter:
             text = re.sub("'{2,}", "", text)
             text = text.strip()
             requests.append(self.insert_heading_text(start_index, text, level))
+            status.set_heading()
 
         elif isinstance(node, mwparserfromhell.nodes.wikilink.Wikilink):
             if node.title is None:
@@ -393,7 +406,7 @@ class GDocConverter:
             }
         }
 
-        update_para = {
+        force_normal_para = {
             'updateParagraphStyle': {
                 'range': {
                     'startIndex': idx,
@@ -406,23 +419,29 @@ class GDocConverter:
             }
         }
 
-        if status and (status.is_bold or status.is_italic):
-            update_text = {
-                'updateTextStyle': {
-                    'range': {
-                        'startIndex': idx,
-                        'endIndex': idx + len(text)
-                    },
-                    'textStyle': {
-                        'bold': status.is_bold,
-                        'italic': status.is_italic,
-                    },
-                    'fields': 'bold, italic'
-                }
+        is_bold = False
+        is_italic = False
+        if status:
+            is_bold = status.is_bold
+            is_italic = status.is_italic
+
+        update_text = {
+            'updateTextStyle': {
+                'range': {
+                    'startIndex': idx,
+                    'endIndex': idx + len(text)
+                },
+                'textStyle': {
+                    'bold': is_bold,
+                    'italic': is_italic,
+                },
+                'fields': 'bold, italic'
             }
-            return [[insert, update_para, update_text]]
-        else:
-            return [[insert, update_para]]
+        }
+
+        # We shouldn't have to force normal para style if we stop the header stuff from leaking
+        return [[insert, update_text]]
+
 
     def insert_heading_text(self, idx, text, level='HEADING_1'):
         """
@@ -440,6 +459,12 @@ class GDocConverter:
                     'index': idx,
                 },
                 'text': text
+            }},
+            { 'insertText': {
+                'location': {
+                    'index': idx,
+                },
+                'text': "\n"
             }}, {
                 'updateParagraphStyle': {
                     'range': {
@@ -451,7 +476,8 @@ class GDocConverter:
                     },
                     'fields': 'namedStyleType'
                 }
-            }]]
+            },
+            ]]
 
 
     def insert_bullet_text(self, idx, text, numbered=False):
