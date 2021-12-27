@@ -5,6 +5,9 @@ import time
 
 from enum import Enum
 
+FONT_SIZE_DEFAULT = 11
+FONT_SIZE_TABLE = 8
+
 class NodeResponseKind(Enum):
     NONE = 1
     BULLET = 2
@@ -19,6 +22,7 @@ class NodeResponse:
         self.is_bold = False
         self.is_italic = False
         self.last_was_heading = False
+        self.font_size = FONT_SIZE_DEFAULT
 
     def is_bullet(self):
         return self.kind == NodeResponseKind.BULLET
@@ -41,14 +45,6 @@ class NodeResponse:
         self.kind = NodeResponseKind.BULLET
         self.bullet_kind = BulletKind.NORMAL
         self.level = level
-        return self
-
-    def set_heading(self):
-        self.last_was_heading = True
-        return self
-
-    def unset_heading(self):
-        self.last_was_heading = False
         return self
 
     def __str__(self):
@@ -104,11 +100,9 @@ class GDocConverter:
 
         requests += self.insert_heading_text(1, page.name + "\n", level='TITLE') 
         requests += self.insert_link(1, "Original wiki location\n\n", self.wiki_prefix + str(page.name)) 
-        status = NodeResponse()
-        status.set_heading()
 
         oldtext = page.text()
-        requests.extend(self.wiki_markup_to_requests(oldtext, status=status))
+        requests.extend(self.wiki_markup_to_requests(oldtext))
 
         requests = list(reversed(requests))
         flat_requests = []
@@ -193,10 +187,7 @@ class GDocConverter:
             if text == '' or not text:
                 # Don't insert anything
                 return status
-            # TODO: Probably want to trim extra newlines here
             if status and status.is_bullet():
-                # TODO: Bullet/indent level? How?
-                # https://developers.google.com/docs/api/how-tos/lists
                 # TODO: insert_bullet_text is way too happy at inserting bullets
                 # requests.append(self.insert_bullet_text(1, str(node)))
                 requests.append(self.insert_text(start_index, text, status))
@@ -211,7 +202,6 @@ class GDocConverter:
             text = re.sub("'{2,}", "", text)
             text = text.strip()
             requests.append(self.insert_heading_text(start_index, text, level))
-            status.set_heading()
 
         elif isinstance(node, mwparserfromhell.nodes.wikilink.Wikilink):
             if node.title is None:
@@ -397,7 +387,7 @@ class GDocConverter:
         if text == "" or not text:
             return []
 
-        insert = {
+        insert_text = {
             'insertText': {
                 'location': {
                     'index': idx,
@@ -406,24 +396,15 @@ class GDocConverter:
             }
         }
 
-        force_normal_para = {
-            'updateParagraphStyle': {
-                'range': {
-                    'startIndex': idx,
-                    'endIndex':  idx + len(text)
-                },
-                'paragraphStyle': {
-                    'namedStyleType': 'NORMAL_TEXT',
-                },
-                'fields': 'namedStyleType'
-            }
-        }
-
         is_bold = False
         is_italic = False
         if status:
             is_bold = status.is_bold
             is_italic = status.is_italic
+
+        pt = FONT_SIZE_DEFAULT
+        if status:
+            pt = status.font_size
 
         update_text = {
             'updateTextStyle': {
@@ -434,13 +415,16 @@ class GDocConverter:
                 'textStyle': {
                     'bold': is_bold,
                     'italic': is_italic,
+                    'fontSize': {
+                        'magnitude': pt,
+                        'unit': 'PT'
+                    },
                 },
-                'fields': 'bold, italic'
+                'fields': 'bold, italic, fontSize'
             }
         }
 
-        # We shouldn't have to force normal para style if we stop the header stuff from leaking
-        return [[insert, update_text]]
+        return [[insert_text, update_text]]
 
 
     def insert_heading_text(self, idx, text, level='HEADING_1'):
@@ -454,25 +438,46 @@ class GDocConverter:
             return []
 
         return [[{
-            'insertText': {
-                'location': {
-                    'index': idx,
-                },
-                'text': text
-            }},
-            { 'insertText': {
-                'location': {
-                    'index': idx,
-                },
-                'text': "\n"
-            }}, {
+                'insertText': {
+                    'location': {
+                        'index': idx,
+                    },
+                    'text': text
+                }
+            },
+            {
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': idx,
+                        'endIndex':  idx + len(text)
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': level,
+                    },
+                    'fields': 'namedStyleType'
+                }
+            },
+            # This is real dumb, but if we don't insert a paragraph and force 
+            # it to NORMAL, the stuff preceding this header in the document 
+            # will get header-tized when the requests are all reversed and 
+            # batched up. It leads to a really dumb extra blank paragraph that 
+            # gets the formatting, but I can't find a good way around that
+            {
+                'insertText': {
+                    'location': {
+                        'index': idx,
+                    },
+                    'text': "\n"
+                }
+            },
+            {
                 'updateParagraphStyle': {
                     'range': {
                         'startIndex': idx,
                         'endIndex':  idx
                     },
                     'paragraphStyle': {
-                        'namedStyleType': level,
+                        'namedStyleType': 'NORMAL_TEXT',
                     },
                     'fields': 'namedStyleType'
                 }
@@ -582,29 +587,53 @@ class GDocConverter:
         split_rows = [re.split(r"(?:^|\n)\|", r)[1:] for r in rows]
         max_columns = max([len(r) for r in split_rows])
 
+        def table_index_of_cell(i, j):
+            # Complicated math to find index location of a given cell 
+            # in the crazy google docs json tree counting system, yuck
+            return (3 + i + max_columns * i * 2) + (j + 1) * 2
+
+        # For some reason we have to tweak this, you would think it would be 
+        # just the same as the table index of the last cell, but it's not
+        end_of_font_range = table_index_of_cell(len(split_rows), max_columns) - max_columns * 2
+
         requests = [
             { 'insertTable': {
                 'location': { 'index': idx, },
                 'rows': len(rows),
-                'columns': max_columns }}]
+                'columns': max_columns }},
+            { 'updateTextStyle': {
+                'range': {
+                    'startIndex': 1,
+                    'endIndex': end_of_font_range
+                },
+                'textStyle': {
+                    'fontSize': {
+                        'magnitude': FONT_SIZE_TABLE,
+                        'unit': 'PT'
+                    },
+                },
+                'fields': 'fontSize'
+            }}
+            ]
 
-        cell_requests = []
+        all_cell_requests = []
 
         for i, row in enumerate(split_rows):
             for j, cell in enumerate(row):
                 text = cell.strip()
                 if text:
-                    # Complicated math to find index location of a given cell 
-                    # in the crazy google docs json tree counting system, yuck
-                    index = (3 + i + max_columns * i * 2) + (j + 1) * 2
+                    index = table_index_of_cell(i, j)
 
                     # Now we parse the cell's content and convert that, too, 
                     # because it could have links and what not
-                    cell_requests.extend(self.wiki_markup_to_requests(text, index))
+                    table_status = NodeResponse()
+                    table_status.font_size = 9
+                    cell = self.wiki_markup_to_requests(text, index, status=table_status)
+                    all_cell_requests.extend(cell)
 
                     # TODO: Links not getting output here???
 
-        requests.extend(reversed(cell_requests))
+        requests.extend(reversed(all_cell_requests))
 
         # Remember, we have to wrap the list of actions in another list
         # so it doesn't get reversed, we've already set it up to happen
