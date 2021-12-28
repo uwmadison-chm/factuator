@@ -407,8 +407,14 @@ def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_i
     x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title)
 
 
-def link(drive_id, folder_id):
+def link(drive_id, folder_id, doc_id=None):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
-    x.mappings.ids_that_link_to_id = {}
-    x.run_check_links(folder_id)
+    if doc_id:
+        # Check just a specific doc
+        linker = GDocLinks(x)
+        linker.check_links(doc_id)
+    else:
+        # Clear out link mappings because we're walkin' em all
+        x.mappings.ids_that_link_to_id = {}
+        x.run_check_links(folder_id)
     x.mappings.save()

@@ -26,6 +26,8 @@ parser.add_argument('--rename-regex', nargs=3, metavar=('match', 'regex', 'resul
 parser.add_argument('--export-gdoc', nargs=5, metavar=('wiki_prefix', 'file_prefix', 'http_prefix', 'drive_id', 'unsorted_folder_id'), help='Export wiki with `wiki_prefix` to google drive at `drive_id` creating unsorted folders in `unsorted_folder_id` for eventual gdocwiki use where `file_prefix` allows public-internet-visible viewing of files at `http_prefix` [EXPERIMENTAL]')
 parser.add_argument('--export-gdoc-single', nargs=6, metavar=('wiki_prefix', 'file_prefix', 'http_prefix', 'drive_id', 'unsorted_folder_id', 'page_title'), help='Export single wiki page with `wiki_prefix` to google drive at `drive_id` creating unsorted folders in `unsorted_folder_id` for eventual gdocwiki use where `file_prefix` allows public-internet-visible viewing of files at `http_prefix` [EXPERIMENTAL]')
 parser.add_argument('--link-gdoc', nargs=2, metavar=('drive_id', 'folder_id'), help='Walk folder with `folder_id` and repair links based on stored mappings [EXPERIMENTAL]')
+
+parser.add_argument('--link-gdoc-single', nargs=3, metavar=('drive_id', 'folder_id', 'doc_id'), help='Repair links in doc based on stored mappings [EXPERIMENTAL]')
 parser.add_argument('-f', '--force', help='Force whatever changes instead of trying to be precise about updates', action='store_true')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
@@ -111,5 +113,8 @@ elif args.export_gdoc_single:
 elif args.link_gdoc:
     import gdocdriver
     gdocdriver.link(args.link_gdoc[0], args.link_gdoc[1])
+elif args.link_gdoc_single:
+    import gdocdriver
+    gdocdriver.link(args.link_gdoc_single[0], args.link_gdoc_single[1], args.link_gdoc_single[2])
 else:
     parser.print_help()

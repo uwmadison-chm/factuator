@@ -245,6 +245,7 @@ class GDocConverter:
                 else:
                     # Insert link to file that we'll fix up in a second pass
                     url = "wiki://" + title
+                    requests.append(self.insert_link(start_index, text, url))
             else:
                 requests.append(self.insert_link(start_index, text, url))
 
