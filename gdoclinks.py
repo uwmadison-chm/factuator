@@ -1,6 +1,7 @@
 import logging
 import re
 from apiclient.http import MediaFileUpload
+from apiclient.errors import HttpError
 
 GOOGLE_DOCS_PREFIX = "https://docs.google.com/document/d/"
 GOOGLE_DRIVE_PREFIX = "https://drive.google.com/file/d/"
@@ -26,12 +27,17 @@ class GDocLinks:
         driver's mappings to the resulting doc or file ID
         """
         logging.info(f"Re-linking inside doc {doc_id}")
-        document = self.driver.get_document(doc_id)
+        try:
+            document = self.driver.get_document(doc_id)
+        except HttpError as e:
+            logging.warning(f"HttpError when trying to read doc {doc_id}: {e}")
+            return
 
         content = document['body']['content']
         requests = []
 
         doc_id_regex = re.compile('docs.google.com/document/d/([^/]{40,})', re.IGNORECASE)
+        category_regex = re.compile(r'[^a-zA-Z0-9.!@$%&*()/]', re.IGNORECASE)
 
         # Now we walk the AST looking for links
         # Links are stored as 'link' properties inside the 'textStyle'
@@ -72,7 +78,6 @@ class GDocLinks:
                             mimetype='*/*',
                             resumable=True)
 
-                        # TODO: this is creating in MY drive, not in the shared drive
                         result = self.driver.drive.files().create(
                                 body=file_metadata,
                                 media_body=media,
@@ -90,8 +95,8 @@ class GDocLinks:
                 elif "Category:" in title:
                     _, category = url.split("Category:", 2)
                     category = category.strip()
-                    # TODO: Do something here?
-                    logging.info(f"Hit category {category}, TODO")
+                    category = category_regex.sub("-", category)
+                    self.driver.add_tag(doc_id, category)
 
                 elif title in self.mappings.title_to_id:
                     doc_url = GOOGLE_DOCS_PREFIX + self.mappings.title_to_id[title]

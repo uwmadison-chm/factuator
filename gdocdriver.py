@@ -76,11 +76,11 @@ class GDocDriver:
         self.mappings.save()
 
 
-    def run_check_links(self, wiki, file_prefix, folder_id):
+    def run_check_links(self, wiki, file_prefix, files_folder_id, folder_id):
         docs = self.recursive_docs_in_folder(folder_id)
 
         for doc_id in docs.keys():
-            linker = GDocLinks(wiki, file_prefix, self, folder_id)
+            linker = GDocLinks(wiki, self, file_prefix, files_folder_id)
             linker.check_links(doc_id)
 
 
@@ -285,7 +285,9 @@ class GDocDriver:
         Reparent document to a specific folder using the drive API.
         """
 
-        f = self.drive.files().get(fileId=doc_id, fields='parents').execute()
+        f = self.drive.files().get(fileId=doc_id,
+                fields='parents',
+                supportsAllDrives=True).execute()
         previous_parents = ",".join(f.get('parents'))
         if not folder_id in previous_parents:
             result = self.drive.files().update(
@@ -296,6 +298,35 @@ class GDocDriver:
                 supportsAllDrives=True,
             ).execute()
 
+
+    def add_tag(self, doc_id, tag):
+        """
+        Store tag in document properties if it's not already there
+        """
+
+        if " " in tag:
+            raise ValueError(f"Google drive properties can't have spaces, can't add tag '{tag}'")
+        result = self.drive.files().get(fileId=doc_id,
+                fields='properties',
+                supportsAllDrives=True).execute()
+
+        if 'properties' in result:
+            props = result['properties']
+        else:
+            props = {}
+
+        tag_with_prefix = f"tags/{tag}"
+        if not tag_with_prefix in props:
+            logging.info(f"Adding tag {tag} to {doc_id}")
+            # Yes, the weird way gdocwiki stores these as is a prefixed key 
+            # and a blank value
+            props[tag_with_prefix] = ''
+            self.drive.files().update(
+                fileId=doc_id,
+                fields='id, properties',
+                body={'properties': props},
+                supportsAllDrives=True,
+            ).execute()
 
 
     def get_document(self, doc_id):
@@ -407,14 +438,17 @@ def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_i
     x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title)
 
 
-def link(wiki, file_prefix, drive_id, folder_id, doc_id=None):
+
+def link_folder(wiki, file_prefix, drive_id, files_folder_id, folder_id):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
-    if doc_id:
-        # Check just a specific doc
-        linker = GDocLinks(wiki, x, file_prefix, folder_id)
-        linker.check_links(doc_id)
-    else:
-        # Clear out link mappings because we're walkin' em all
-        x.mappings.ids_that_link_to_id = {}
-        x.run_check_links(wiki, file_prefix, folder_id)
+    # Clear out link mappings because we're walkin' em all
+    x.mappings.ids_that_link_to_id = {}
+    x.run_check_links(wiki, file_prefix, files_folder_id, folder_id)
+    x.mappings.save()
+
+def link_doc(wiki, file_prefix, drive_id, files_folder_id, doc_id):
+    x = GDocDriver(MAPPINGS_FILE, drive_id)
+    # Check just a specific doc
+    linker = GDocLinks(wiki, x, file_prefix, files_folder_id)
+    linker.check_links(doc_id)
     x.mappings.save()
