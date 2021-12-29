@@ -76,11 +76,11 @@ class GDocDriver:
         self.mappings.save()
 
 
-    def run_check_links(self, folder_id):
+    def run_check_links(self, wiki, file_prefix, folder_id):
         docs = self.recursive_docs_in_folder(folder_id)
 
         for doc_id in docs.keys():
-            linker = GDocLinks(self)
+            linker = GDocLinks(wiki, file_prefix, self, folder_id)
             linker.check_links(doc_id)
 
 
@@ -407,14 +407,14 @@ def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_i
     x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title)
 
 
-def link(drive_id, folder_id, doc_id=None):
+def link(wiki, file_prefix, drive_id, folder_id, doc_id=None):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
     if doc_id:
         # Check just a specific doc
-        linker = GDocLinks(x)
+        linker = GDocLinks(wiki, x, file_prefix, folder_id)
         linker.check_links(doc_id)
     else:
         # Clear out link mappings because we're walkin' em all
         x.mappings.ids_that_link_to_id = {}
-        x.run_check_links(folder_id)
+        x.run_check_links(wiki, file_prefix, folder_id)
     x.mappings.save()

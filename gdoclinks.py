@@ -6,9 +6,18 @@ GOOGLE_DOCS_PREFIX = "https://docs.google.com/document/d/"
 GOOGLE_DRIVE_PREFIX = "https://drive.google.com/file/d/"
 
 class GDocLinks:
-    def __init__(self, driver):
+    def __init__(self, wiki, driver, file_prefix, folder_id):
+        """
+        Needs a mwclient wiki connection, a GDocDriver, a file_prefix where we 
+        can stash files, the mappings so we can save what links to what and 
+        what file IDs represent what wiki files, and the folder_id in Drive to 
+        store new files
+        """
+        self.wiki = wiki
         self.driver = driver
+        self.file_prefix = file_prefix
         self.mappings = driver.mappings
+        self.folder_id = folder_id
 
 
     def check_links(self, doc_id):
@@ -45,21 +54,38 @@ class GDocLinks:
                     title = title.strip(":")
                     title = title.replace("Media:", "File:")
 
-                    wiki = self.driver.wiki
-
-                    # TODO: Crud, now this thing needs a whole wiki connection
-
                     if title in self.mappings.file_to_id:
                         file_url = GOOGLE_DRIVE_PREFIX + self.mappings.file_to_id[title]
                     else:
                         # Bring that file over, store in mappings separately as well
-                        file_id = "TODO"
-                        # self.mappings.file_to_id[title] = file_id
+                        filename = self.file_prefix + "/" + title
+                        wiki_file = self.wiki.pages[title]
+                        with open(filename, 'wb') as fd:
+                            wiki_file.download(fd)
+
+                        file_metadata = {
+                            'name': title.replace("File:", ""),
+                            'mimeType': '*/*',
+                            'parents': [self.folder_id],
+                        }
+                        media = MediaFileUpload(filename,
+                            mimetype='*/*',
+                            resumable=True)
+
+                        # TODO: this is creating in MY drive, not in the shared drive
+                        result = self.driver.drive.files().create(
+                                body=file_metadata,
+                                media_body=media,
+                                supportsAllDrives=True,
+                                fields='id').execute()
+                        file_id = result.get('id')
+
+                        self.mappings.file_to_id[title] = file_id
                         file_url = GOOGLE_DRIVE_PREFIX + file_id
 
-                    logging.info(f"Would link {title} to {file_id}")
-                    # request = self.fix_link(start_index, end_index, file_url)
-                    # requests.append(request)
+                    logging.info(f"Linking {title} to {file_id}")
+                    request = self.fix_link(start_index, end_index, file_url)
+                    requests.append(request)
 
                 elif "Category:" in title:
                     _, category = url.split("Category:", 2)

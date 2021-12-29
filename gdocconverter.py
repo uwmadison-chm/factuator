@@ -56,6 +56,7 @@ class NodeResponse:
 
 
 GOOGLE_DOCS_PREFIX = "https://docs.google.com/document/d/"
+GOOGLE_DRIVE_PREFIX = "https://drive.google.com/file/d/"
 
 
 class GDocConverter:
@@ -242,6 +243,11 @@ class GDocConverter:
                     logging.info(f"Trying to insert image at url: {uri}")
                     requests.append(self.insert_image(start_index, uri))
                     requests.append(self.insert_text(start_index, additional_text))
+
+                elif title in self.mappings.file_to_id:
+                    url = GOOGLE_DRIVE_PREFIX + self.mappings.file_to_id[title]
+                    requests.append(self.insert_link(start_index, text, url))
+
                 else:
                     # Insert link to file that we'll fix up in a second pass
                     url = "wiki://" + title
