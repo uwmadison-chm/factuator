@@ -362,30 +362,6 @@ class GDocConverter:
             }}])
 
 
-    def format_text(self, idx, idxend, is_bold, is_italic, is_underline):
-        """
-        Format the text at certain indexes with various options
-
-        TODO: Just an example, not actually in use because of how the wiki markup works,
-                may need to do a second pass with get_text_range to catch this stuff fully? Yargh
-        """
-        return [{
-            'updateTextStyle': {
-                'range': {
-                    'startIndex': idx,
-                    'endIndex': idxend
-                },
-                'textStyle': {
-                    'bold': is_bold,
-                    'italic': is_italic,
-                    'underline': is_underline
-                },
-                'fields': 'bold, italic, underline'
-            }}]
-
-        return req
-
-
     def insert_text(self, idx, text, status=None):
         """
         Create text.

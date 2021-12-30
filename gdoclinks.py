@@ -63,7 +63,9 @@ class GDocLinks:
                     if title in self.mappings.file_to_id:
                         file_url = GOOGLE_DRIVE_PREFIX + self.mappings.file_to_id[title]
                     else:
-                        # Bring that file over, store in mappings separately as well
+                        # TODO: Merge this stuff into a central place so initial conversion can do it, too?
+
+                        # Bring file over, store in mappings
                         filename = self.file_prefix + "/" + title
                         wiki_file = self.wiki.pages[title]
                         with open(filename, 'wb') as fd:
