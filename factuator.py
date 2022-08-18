@@ -28,6 +28,7 @@ parser.add_argument('--export-gdoc-single', nargs=6, metavar=('wiki_prefix', 'fi
 parser.add_argument('--link-gdoc', nargs=4, metavar=('file_prefix', 'drive_id', 'files_folder_id', 'folder_id'), help='Walk folder with `folder_id` and repair links based on stored mappings [EXPERIMENTAL]')
 parser.add_argument('--link-gdoc-single', nargs=4, metavar=('file_prefix', 'drive_id', 'files_folder_id', 'doc_id'), help='Repair links in doc based on stored mappings [EXPERIMENTAL]')
 parser.add_argument('-f', '--force', help='Force whatever changes instead of trying to be precise about updates', action='store_true')
+parser.add_argument('-n', '--older', metavar="ISO_DATE", help='Update pages not updated since a given date')
 parser.add_argument('-a', '--all', help='Run all known automated updates', action='store_true')
 args = parser.parse_args()
 
@@ -99,13 +100,13 @@ elif args.all:
 elif args.export_gdoc:
     import gdocdriver
     gdocdriver.export_mediawiki(mother, args.export_gdoc[0],
-            args.force,
+            args.force, args.older,
             args.export_gdoc[1], args.export_gdoc[2],
             args.export_gdoc[3], args.export_gdoc[4])
 elif args.export_gdoc_single:
     import gdocdriver
     gdocdriver.export_mediawiki(mother, args.export_gdoc_single[0],
-            args.force,
+            args.force, args.older,
             args.export_gdoc_single[1], args.export_gdoc_single[2],
             args.export_gdoc_single[3], args.export_gdoc_single[4],
             args.export_gdoc_single[5])

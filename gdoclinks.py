@@ -1,5 +1,6 @@
 import logging
 import re
+import urllib.parse
 from apiclient.http import MediaFileUpload
 from apiclient.errors import HttpError
 
@@ -55,24 +56,32 @@ class GDocLinks:
             if url.startswith("wiki://"):
                 # Check in mappings for something with that title
                 _, title = url.split("://", 2)
-                if "File:" in title or "Media:" in title:
-                    # Regularize the title
-                    title = title.strip(":")
-                    title = title.replace("Media:", "File:")
 
-                    if title in self.mappings.file_to_id:
-                        file_url = GOOGLE_DRIVE_PREFIX + self.mappings.file_to_id[title]
+                # Regularize the title
+                title = title.replace("Media:", "File:")
+                title = title.lstrip(":")
+
+                if title.startswith("File:"):
+                    # Title is... sometimes URI encoded
+                    clean_title = urllib.parse.unquote(title)
+
+                    if clean_title in self.mappings.file_to_id:
+                        file_url = GOOGLE_DRIVE_PREFIX + self.mappings.file_to_id[clean_title]
                     else:
                         # TODO: Merge this stuff into a central place so initial conversion can do it, too?
-
                         # Bring file over, store in mappings
-                        filename = self.file_prefix + "/" + title
-                        wiki_file = self.wiki.pages[title]
-                        with open(filename, 'wb') as fd:
-                            wiki_file.download(fd)
+                        filename = self.file_prefix + "/" + clean_title
+                        try:
+                            logging.debug(f"Downloading wiki file {clean_title} to {filename}")
+                            wiki_file = self.wiki.pages[clean_title]
+                            with open(filename, 'wb') as fd:
+                                wiki_file.download(fd)
+                        except KeyError as e:
+                            logging.warning(f"File '{title}' cleaned as '{clean_title}' not found in wiki when checking links in {doc_id}")
+                            return False
 
                         file_metadata = {
-                            'name': title.replace("File:", ""),
+                            'name': clean_title.replace("File:", ""),
                             'mimeType': '*/*',
                             'parents': [self.folder_id],
                         }
@@ -87,10 +96,10 @@ class GDocLinks:
                                 fields='id').execute()
                         file_id = result.get('id')
 
-                        self.mappings.file_to_id[title] = file_id
+                        self.mappings.file_to_id[clean_title] = file_id
                         file_url = GOOGLE_DRIVE_PREFIX + file_id
 
-                    logging.info(f"Linking {title} to {file_id}")
+                    logging.info(f"Linking {title}, cleaned as {clean_title}, to {file_url}")
                     request = self.fix_link(start_index, end_index, file_url)
                     requests.append(request)
 

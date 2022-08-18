@@ -2,6 +2,9 @@ import mwparserfromhell
 import logging
 import re
 import time
+import tempfile
+import socket
+import os
 
 from enum import Enum
 
@@ -43,8 +46,12 @@ class NodeResponse:
 
     def set_numeric_bullet(self, level):
         self.kind = NodeResponseKind.BULLET
-        self.bullet_kind = BulletKind.NORMAL
+        self.bullet_kind = BulletKind.NUMERIC
         self.level = level
+        return self
+
+    def bullet_complete(self):
+        self.kind = NodeResponseKind.NONE
         return self
 
     def __str__(self):
@@ -190,8 +197,9 @@ class GDocConverter:
                 return status
             if status and status.is_bullet():
                 # TODO: insert_bullet_text is way too happy at inserting bullets
-                # requests.append(self.insert_bullet_text(1, str(node)))
-                requests.append(self.insert_text(start_index, text, status))
+                requests.append(self.insert_bullet_text(start_index, status, str(node)))
+                # requests.append(self.insert_text(start_index, text, status))
+                status = status.bullet_complete()
             else:
                 requests.append(self.insert_text(start_index, text, status))
 
@@ -234,14 +242,28 @@ class GDocConverter:
                             additional_text = "\n" + caption
 
                     image = self.wiki.pages[title]
-                    uri = self.http_prefix + "/" + title
-                    filename = self.file_prefix + "/" + title
-                    with open(filename, 'wb') as fd:
-                        image.download(fd)
+                    escaped_title = title.replace(" ", "_")
+                    uri = self.http_prefix + "/" + escaped_title
+                    filename = self.file_prefix + "/" + escaped_title
+                    if 'baldi' in socket.gethostname():
+                        with open(filename, 'wb') as fd:
+                            image.download(fd)
+                    else:
+                        _, tempfilename = tempfile.mkstemp()
+                        with open(tempfilename, 'wb') as fd:
+                            image.download(fd)
+                            cmd = f"chmod 664 '{tempfilename}'"
+                            os.system(cmd)
+                            cmd = f"scp '{tempfilename}' baldi:'{filename}'"
+                            os.system(cmd)
+                        os.system(f"rm {tempfilename}")
 
                     # TODO: Consider extracting width from thumb_params and passing along?
                     logging.info(f"Trying to insert image at url: {uri}")
-                    requests.append(self.insert_image(start_index, uri))
+                    # TODO: Disable when image truncation is "solved"
+                    # requests.append(self.insert_image(start_index, uri))
+                    requests.append(self.insert_text(start_index, "IMAGE PENDING"))
+
                     requests.append(self.insert_text(start_index, additional_text))
 
                 elif title in self.mappings.file_to_id:
@@ -468,34 +490,53 @@ class GDocConverter:
             ]]
 
 
-    def insert_bullet_text(self, idx, text, numbered=False):
+    def insert_bullet_text(self, idx, status, text):
         """
         Create bullets in the document.
+
+        I couldn't figure out how to do this without completely
+        bulletting everything in the doc, so I stole the idea from
+        https://stackoverflow.com/questions/65330602/how-do-i-indent-a-bulleted-list-with-the-google-docs-api
+        to do a really dumb set of insertions and deletions
         """
 
         if text == "" or not text:
             return []
 
-        if numbered:
-            bullet_preset = 'BULLET_DECIMAL_ALPHA_ROMAN_PARENS'
+        if status.bullet_kind == BulletKind.NUMERIC:
+            bullet_preset = 'NUMBERED_DECIMAL_ALPHA_ROMAN_PARENS'
         else:
             bullet_preset = 'BULLET_DISC_CIRCLE_SQUARE'
 
-        return [[{
-            'insertText': {
+        bullet_text = ("\t" * (status.level - 1)) + text
+
+        return [[
+            { 'insertText': {
                 'location': {
                     'index': idx,
                 },
-                'text': text
-            }}, {
-                'createParagraphBullets': {
+                'text': f"\n"
+            }},
+            { 'createParagraphBullets': {
                     'range': {
-                        'startIndex': idx,
-                        'endIndex':  idx + len(text)
+                        'startIndex': idx+1,
+                        'endIndex':  idx+1
                     },
                     'bulletPreset': bullet_preset,
-                }
-            }]]
+            }},
+            { 'insertText': {
+                'location': {
+                    'index': idx+1,
+                },
+                'text': bullet_text
+            }},
+            { 'deleteContentRange': {
+                    'range': {
+                        'startIndex': idx + len(bullet_text),
+                        'endIndex':  idx + len(bullet_text) + 1
+                    },
+            }},
+            ]]
 
 
     def insert_image(self, idx, uri):
@@ -569,6 +610,9 @@ class GDocConverter:
         # so the ^|\n here is a bad hack to get by those
         split_rows = [re.split(r"(?:^|\n)\|", r)[1:] for r in rows]
         max_columns = max([len(r) for r in split_rows])
+        if max_columns == 0:
+            logging.warning(f"Hit table with no columns? Skipping")
+            return self.insert_text(idx, "[Table failed to convert]")
 
         def table_index_of_cell(i, j):
             # Complicated math to find index location of a given cell 

@@ -3,6 +3,9 @@ import logging
 import requests
 import os
 import time
+import pytz
+from datetime import datetime
+from dateutil import parser
 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -49,7 +52,7 @@ class GDocDriver:
         self.folders = {}
 
 
-    def run_export(self, wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title):
+    def run_export(self, wiki, wiki_prefix, force, older, file_prefix, http_prefix, unsorted_folder_id, page_title):
         """
         Function that does the conversion from mediawiki to gdoc,
         walking the mediawiki pages
@@ -70,6 +73,8 @@ class GDocDriver:
             self.load_common_folders()
             if force:
                 self.convert_all()
+            if older:
+                self.convert_all(older_than=older)
             else:
                 self.convert_all_new()
 
@@ -220,15 +225,16 @@ class GDocDriver:
         for page in category:
             self.convert(page)
 
-    def convert_all(self, only_if_new=False):
+    def convert_all(self, only_if_new=False, older_than=None):
         for page in self.wiki.pages:
-            self.convert(page, only_if_new=only_if_new)
+            did_stuff = self.convert(page, only_if_new=only_if_new, older_than=older_than)
 
-            # Hitting some Google api limits, so let's sleep a bit here
-            time.sleep(10.0)
+            if did_stuff:
+                # Hitting some Google api limits, so let's sleep a bit here
+                time.sleep(10.0)
 
     def convert_all_new(self):
-        self.convert_all(True)
+        self.convert_all(only_if_new=True)
 
 
     def initialize_google_services(self):
@@ -332,6 +338,12 @@ class GDocDriver:
     def get_document(self, doc_id):
         return self.docs.documents().get(documentId=doc_id).execute()
 
+    def get_document_modified_date(self, doc_id):
+        f = self.drive.files().get(fileId=doc_id,
+                fields='modifiedTime',
+                supportsAllDrives=True).execute()
+        return parser.parse(f['modifiedTime'])
+
 
     def batch_update(self, doc_id, requests, debug=False):
         """
@@ -378,12 +390,24 @@ class GDocDriver:
                         self.traverse(f, item, start_index, end_index)
 
 
-    def convert(self, page, only_if_new=False, debug=False):
+    def convert(self, page, only_if_new=False, older_than=None, debug=False):
         if page.name in self.mappings.title_to_id:
             if only_if_new:
-                return
+                return False
             doc_id = self.mappings.title_to_id[page.name]
+            if older_than:
+                # someday, load up MediaWiki modify date and Google Doc modify date and compare them
+                # NOTE: I have no idea what timezone the wiki timestamps actually are 
+                # wiki_date = datetime.fromtimestamp(time.mktime(page.touched), tzinfo=pytz.timezone('US/Central'))
+                # For now, just compare doc_date with the command line
+                doc_date = self.get_document_modified_date(doc_id)
+                # Parse the command line param and hack in a timezone
+                older_date = parser.parse(older_than).replace(tzinfo=pytz.timezone('US/Central'))
+                if doc_date > older_date:
+                    return False
+
             document = self.get_document(doc_id)
+
             logging.info(f"Converting {page.name} into existing doc {doc_id}")
         else:
             full_title = page.name
@@ -431,11 +455,12 @@ class GDocDriver:
                 self.file_prefix,
                 self.http_prefix)
         c.convert(page, doc_id, debug=debug)
+        return True
 
 
-def export_mediawiki(wiki, wiki_prefix, force, file_prefix, http_prefix, drive_id, unsorted_folder_id, page_title=None):
+def export_mediawiki(wiki, wiki_prefix, force, older, file_prefix, http_prefix, drive_id, unsorted_folder_id, page_title=None):
     x = GDocDriver(MAPPINGS_FILE, drive_id)
-    x.run_export(wiki, wiki_prefix, force, file_prefix, http_prefix, unsorted_folder_id, page_title)
+    x.run_export(wiki, wiki_prefix, force, older, file_prefix, http_prefix, unsorted_folder_id, page_title)
 
 
 
